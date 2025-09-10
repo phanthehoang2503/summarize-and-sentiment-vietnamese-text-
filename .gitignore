@@ -1,7 +1,71 @@
-data/
-data/raw
-data/processed
+# Data directories
+data/raw/
+data/processed/
 cache/
+*.csv
+*.json.gz
+*.pkl
+
+# Model outputs
+models/*/checkpoint-*/
+models/*/runs/
+models/*/*.safetensors
+models/*/*.bin
+
+# IDE and system files
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Environment variables
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large files
+*.zip
+*.tar.gz
+*.rar
 
 # Created by https://www.toptal.com/developers/gitignore/api/pycharm,visualstudiocode,python
 # Edit at https://www.toptal.com/developers/gitignore?templates=pycharm,visualstudiocode,python
@@ -313,3 +377,21 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/pycharm,visualstudiocode,python
 /data/
 /data/raw/
+# Temporary and test files
+*.tmp
+*.temp
+*_temp.py
+*_test.py
+test_*.py
+# IDE specific
+*.swp
+*.swo
+*~
+# OS specific
+desktop.ini
+# Large model files
+pytorch_model.bin
+model.safetensors
+# Training outputs
+tensorboard_logs/
+wandb/
