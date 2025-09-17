@@ -10,8 +10,15 @@ from tqdm import tqdm
 from typing import List, Dict, Tuple, Optional, Union
 import sys
 
-sys.path.append(str(Path(__file__).parent.parent.parent))
-from config import config
+# Add project root to path for legacy compatibility
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
+from app.core.config import get_config
+
+# Get configuration
+config = get_config()
 
 
 class VietnameseSummarizer:
@@ -52,6 +59,9 @@ class VietnameseSummarizer:
         else:
             self.device = device
             
+        # Flag to track if we've fallen back to CPU due to CUDA errors
+        self.cuda_failed = False
+            
         print(f"Using device: {self.device}")
         print(f"Loading model from: {self.model_path}")
         
@@ -66,16 +76,42 @@ class VietnameseSummarizer:
     def _load_model(self):
         """Load the tokenizer and model"""
         try:
+            # Load tokenizer with specific configuration
             self.tokenizer = AutoTokenizer.from_pretrained(
                 str(self.model_path), 
                 cache_dir=str(self.cache_dir)
             )
+            
+            # Ensure tokenizer has required special tokens
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            # Load model
             self.model = AutoModelForSeq2SeqLM.from_pretrained(
                 str(self.model_path), 
                 cache_dir=str(self.cache_dir)
-            ).to(self.device)
+            )
+            
+            # Try to move to device with error handling
+            try:
+                self.model = self.model.to(self.device)
+                # Resize token embeddings if needed
+                self.model.resize_token_embeddings(len(self.tokenizer))
+            except RuntimeError as e:
+                if "CUDA" in str(e):
+                    print(f"CUDA error during model loading: {e}")
+                    print("Falling back to CPU...")
+                    self.device = "cpu"
+                    self.cuda_failed = True
+                    self.model = self.model.to(self.device)
+                    self.model.resize_token_embeddings(len(self.tokenizer))
+                else:
+                    raise
             
             print("Model loaded successfully!")
+            print(f"Vocab size: {len(self.tokenizer)}")
+            print(f"Model vocab size: {self.model.config.vocab_size}")
+            print(f"Device: {self.device}")
             
         except Exception as e:
             raise RuntimeError(f"Failed to load model: {e}")
@@ -83,16 +119,17 @@ class VietnameseSummarizer:
     def summarize(
         self, 
         text: str, 
-        max_length: int = 300,
+        max_length: int = None,  # Will use config default if None
         min_length: int = None,  # Will be calculated dynamically
-        num_beams: int = 6,
-        length_penalty: float = 1.2,
-        no_repeat_ngram_size: int = 3,
-        repetition_penalty: float = 2.0,
-        early_stopping: bool = True
+        num_beams: int = None,  # Will use config default if None
+        length_penalty: float = None,  # Will use config default if None
+        no_repeat_ngram_size: int = None,
+        repetition_penalty: float = None,  # Will use config default if None
+        early_stopping: bool = True,
+        quality_mode: str = None  # "concise", "balanced", "detailed"
     ) -> str:
         """
-        Generate summary for a single text with dynamic min_length
+        Generate summary for a single text with configurable quality settings
         
         Args:
             text: Input Vietnamese text to summarize
@@ -103,6 +140,7 @@ class VietnameseSummarizer:
             no_repeat_ngram_size: Size of n-grams that cannot repeat
             repetition_penalty: Penalty for repetition
             early_stopping: Whether to stop early when all beams reach EOS
+            quality_mode: Quality preset ("concise", "balanced", "detailed")
             
         Returns:
             Generated summary as string
@@ -110,58 +148,186 @@ class VietnameseSummarizer:
         if not text or len(text.strip()) == 0:
             return ""
         
-        # Calculate dynamic min_length based on input text length
+        # Add Vietnamese summarization prompt
+        prompted_text = f"Tóm tắt: {text.strip()}"
+        
+        # Get generation settings from config
+        gen_config = config.generation['summarization']
+        
+        # Set defaults from config if not provided, with mode-specific overrides
+        if max_length is None:
+            max_length = 200 if quality_mode == "detailed" else 100  # Reasonable limits
+        if num_beams is None:
+            num_beams = 3  # Keep consistent for quality
+        if length_penalty is None:
+            length_penalty = 0.9 if quality_mode == "detailed" else 0.7  # Favor shorter for balanced
+        if repetition_penalty is None:
+            repetition_penalty = 1.1  # Slightly higher to avoid repetition
+        if no_repeat_ngram_size is None:
+            no_repeat_ngram_size = 3  # Increase to avoid repetition
+        
+        # Apply quality mode (simplified)
+        if quality_mode is None:
+            quality_mode = "balanced"
+        
+        # Calculate text length for later use
+        text_length = len(text)
+        
+        # Calculate dynamic min_length based on quality mode and text length  
         if min_length is None:
-            text_length = len(text)
-            if text_length < 200:
-                # Very short text - minimal summary
-                min_length = max(3, text_length // 20)
-            elif text_length < 500:
-                # Short text - conservative summary  
-                min_length = max(8, text_length // 18)
-            elif text_length < 1000:
-                # Medium text - moderate summary
-                min_length = max(12, text_length // 16)
-            elif text_length < 2000:
-                # Long text - substantial summary
-                min_length = max(20, text_length // 18)
+            if quality_mode == "balanced":
+                # Aim for 5-15% of original length (concise)
+                min_length = max(15, int(text_length * 0.05))
+                
+            elif quality_mode == "detailed":
+                # Aim for 20-40% of original length (more comprehensive)
+                min_length = max(30, int(text_length * 0.15))
+                
             else:
-                # Very long text - comprehensive summary
-                min_length = max(30, min(60, text_length // 20))
+                # Fallback to balanced
+                min_length = max(15, int(text_length * 0.05))
         
-        # Adjust max_length to be reasonable relative to input and min_length
-        if max_length < min_length * 2:
-            max_length = min_length * 4
+        # Ensure min_length is an integer
+        min_length = int(min_length)
         
-        # Cap max_length for aggressive compression (20-30% of original)
-        input_based_max = max(min_length * 2, text_length // 4)  # 25% max
-        max_length = min(max_length, input_based_max)
+        # Calculate max_length based on compression ratio
+        if quality_mode == "balanced":
+            max_length = min(max_length, max(min_length + 20, int(text_length * 0.25)))  # 25% max
+        elif quality_mode == "detailed":
+            max_length = min(max_length, max(min_length + 30, int(text_length * 0.50)))  # 50% max
+        else:
+            max_length = min(max_length, max(min_length + 20, int(text_length * 0.25)))
+        
+        # Ensure max_length is reasonable and an integer
+        max_length = int(max_length)
+        max_length = max(max_length, min_length + 10)  # At least 10 chars more than min
+        
+        # IMPORTANT: Ensure lengths don't exceed model limits
+        # ViT5 typically has a max length of 512 tokens
+        max_length = min(max_length, 256)  # Conservative limit for generation
+        min_length = min(min_length, max_length - 5)  # Ensure min < max
+        
+        # Ensure we have reasonable bounds
+        if min_length >= max_length:
+            min_length = max(1, max_length - 10)
             
-        # Tokenize input
+        print(f"Generation params: min_length={min_length}, max_length={max_length}")
+            
+        # Tokenize input with prompt
         inputs = self.tokenizer(
-            text,
+            prompted_text,
             return_tensors="pt",
             truncation=True,
             max_length=512,
             padding=True
         ).to(self.device)
         
-        # Generate summary
-        with torch.no_grad():
-            summary_ids = self.model.generate(
-                **inputs,
-                max_length=max_length,
-                min_length=min_length,
-                num_beams=num_beams,
-                length_penalty=length_penalty,
-                no_repeat_ngram_size=no_repeat_ngram_size,
-                repetition_penalty=repetition_penalty,
-                early_stopping=early_stopping
-            )
+        # Check input token length to avoid issues
+        input_length = inputs['input_ids'].shape[1]
+        print(f"Input tokens: {input_length}")
+        
+        # Adjust max_length if input is very long
+        if input_length > 400:
+            max_length = min(max_length, 128)  # More conservative for long inputs
+            min_length = min(min_length, max_length - 5)
+        
+        # Generate summary with error handling
+        try:
+            with torch.no_grad():
+                summary_ids = self.model.generate(
+                    **inputs,
+                    max_length=max_length,
+                    min_length=min_length,
+                    num_beams=num_beams,
+                    length_penalty=length_penalty,
+                    no_repeat_ngram_size=no_repeat_ngram_size,
+                    repetition_penalty=repetition_penalty,
+                    early_stopping=early_stopping,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    do_sample=False  # Use deterministic generation
+                )
+        except RuntimeError as e:
+            if "CUDA" in str(e) and self.device == "cuda" and not self.cuda_failed:
+                print(f"CUDA error encountered: {e}")
+                print("Falling back to CPU...")
+                # Move model to CPU and retry
+                self.model = self.model.cpu()
+                self.device = "cpu"
+                self.cuda_failed = True
+                inputs = {k: v.cpu() for k, v in inputs.items()}
+                
+                with torch.no_grad():
+                    summary_ids = self.model.generate(
+                        **inputs,
+                        max_length=min(64, max_length),
+                        min_length=min(10, min_length),
+                        num_beams=2,
+                        length_penalty=1.0,
+                        early_stopping=True,
+                        pad_token_id=self.tokenizer.pad_token_id,
+                        eos_token_id=self.tokenizer.eos_token_id,
+                        do_sample=False
+                    )
+            else:
+                print(f"Generation error: {e}")
+                # Fallback to very conservative settings
+                with torch.no_grad():
+                    summary_ids = self.model.generate(
+                        **inputs,
+                        max_length=min(64, max_length),
+                        min_length=min(10, min_length),
+                        num_beams=2,
+                        length_penalty=1.0,
+                        early_stopping=True,
+                        pad_token_id=self.tokenizer.pad_token_id,
+                        eos_token_id=self.tokenizer.eos_token_id,
+                        do_sample=False
+                    )
         
         # Decode summary
         summary = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+        
+        # Clean up the summary - remove the prompt if it's included in output
+        if summary.startswith("Tóm tắt: "):
+            summary = summary[9:]  # Remove "Tóm tắt: " prefix
+        
+        # Additional cleanup - remove any text that looks like it's repeating the prompt
+        summary = summary.strip()
+        
+        # Apply quality-aware post-processing only if summary is problematic
+        if len(summary) >= len(text):
+            # Force summarization respecting quality mode
+            sentences = summary.split('. ')
+            if len(sentences) > 1:
+                if quality_mode == "detailed":
+                    # Take first 2-3 sentences for detailed mode
+                    num_sentences = min(3, len(sentences))
+                    summary = '. '.join(sentences[:num_sentences])
+                    if not summary.endswith('.'):
+                        summary += '.'
+                else:
+                    # Take first sentence for balanced mode
+                    summary = sentences[0] + '.'
+            else:
+                # Fallback: respect quality mode ratios
+                if quality_mode == "detailed":
+                    summary = summary[:int(len(text) * 0.7)]  # 70% for detailed
+                else:
+                    summary = summary[:int(len(text) * 0.5)]  # 50% for balanced
+                
+                if not summary.endswith('.'):
+                    summary += '.'
+        
         return summary.strip()
+    
+    def summarize_balanced(self, text: str) -> str:
+        """Generate a balanced summary (40% compression) - default"""
+        return self.summarize(text, quality_mode="balanced")
+    
+    def summarize_detailed(self, text: str) -> str:
+        """Generate a detailed summary (70% compression)"""
+        return self.summarize(text, quality_mode="detailed")
     
     def should_summarize(self, text: str, min_summary_length: int = 300) -> bool:
         """

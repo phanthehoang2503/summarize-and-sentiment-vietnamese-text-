@@ -1,0 +1,163 @@
+# Project Configuration
+# Vietnamese Text Summarization and Sentiment Analysis
+
+project:
+  name: "vietnamese-text-analysis"
+  version: "1.0.0"
+  description: "Vietnamese text summarization and sentiment analysis using transformers"
+  author: "Your Name"
+
+# Directory Structure
+paths:
+  project_root: "."
+  data:
+    base: "data"
+    raw: "data/raw"
+    processed: "data/processed"
+    stopwords: "data/vietnamese-stopwords.txt"
+  cache:
+    base: "cache"
+    models: "cache/models"
+  models:
+    base: "models"
+    sentiment: "models/sentiment"
+    summarizer: "models/summarizer"
+  scripts: "scripts"
+  notebooks: "notebooks"
+  src: "src"
+  tests: "tests"
+
+# Data Files
+data_files:
+  summarization:
+    raw: "data/raw/data_summary.csv"
+    processed: "data/processed/summary_clean.csv"
+  sentiment:
+    raw: "data/raw/data_sentiment.csv"
+    processed: "data/processed/reviews_clean.csv"
+
+# Model Configurations
+models:
+  phobert:
+    name: "vinai/phobert-base"
+    type: "sentiment"
+    cache_dir: "cache/vinai/phobert-base"
+    output_dir: "models/sentiment"
+    config:
+      num_labels: 3
+      max_length: 256
+      use_fast_tokenizer: false
+      
+  vit5:
+    name: "VietAI/vit5-base"
+    type: "summarization"
+    cache_dir: "cache/VietAI/vit5-base"
+    output_dir: "models/summarizer"
+    config:
+      max_source_length: 512
+      max_target_length: 128
+      use_fast_tokenizer: true
+
+# Training Configurations
+training:
+  sentiment:
+    model: "phobert"
+    batch_size: 16
+    learning_rate: 2.0e-5
+    num_epochs: 3
+    warmup_steps: 500
+    weight_decay: 0.01
+    save_steps: 500
+    eval_steps: 100
+    logging_steps: 50
+    evaluation_strategy: "steps"
+    save_strategy: "steps"
+    load_best_model_at_end: true
+    metric_for_best_model: "eval_f1"
+    greater_is_better: true
+    
+  summarization:
+    model: "vit5"
+    batch_size: 8
+    learning_rate: 3.0e-4
+    num_epochs: 3
+    warmup_steps: 1000
+    weight_decay: 0.01
+    save_steps: 1000
+    eval_steps: 500
+    logging_steps: 100
+    evaluation_strategy: "steps"
+    save_strategy: "steps"
+    load_best_model_at_end: true
+    metric_for_best_model: "eval_rouge1"
+    greater_is_better: true
+
+# Preprocessing Settings
+preprocessing:
+  summarization:
+    min_content_length: 30
+    min_summary_length: 5
+    max_duplicate_ratio: 0.1
+
+  sentiment:
+    min_comment_length: 5
+    max_short_comment_ratio: 0.2
+    remove_stopwords: true
+    clean_emojis: true
+    sample_fraction: 1.0
+    balance_method: "undersample"  # Options: undersample, oversample, hybrid, none
+    target_balance_ratio: 1.5  # Maximum allowed ratio between classes
+
+# Generation Settings
+generation:
+  summarization:
+    # Quality settings - higher compression_ratio means shorter summaries
+    compression_ratio: 0.6  # 60% of original length (more conservative)
+    min_compression_ratio: 0.5  # Minimum 50% compression (balanced mode)
+    max_compression_ratio: 0.8  # Maximum 80% compression (detailed mode)
+    
+    # Generation parameters (more conservative)
+    default_max_length: 300
+    num_beams: 3  # Reduced from 4
+    length_penalty: 1.0  # Neutral length preference
+    repetition_penalty: 1.1  # Much more conservative
+    no_repeat_ngram_size: 2  # Reduced from 3
+    early_stopping: true
+    
+    # Quality thresholds
+    min_summary_tokens: 20  # Increased minimum
+    quality_mode: "balanced"  # Options: "balanced", "detailed"
+    
+  general:
+    random_state: 42
+    encoding: "utf-8-sig"
+    test_size: 0.2
+    validation_size: 0.1
+
+# Environment Settings
+environment:
+  device: "auto"  # auto, cpu, cuda
+  mixed_precision: true
+  dataloader_num_workers: 4
+  pin_memory: true
+  
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/training.log"
+  console: true
+
+# Evaluation Settings
+evaluation:
+  metrics:
+    sentiment: ["accuracy", "precision", "recall", "f1"]
+    summarization: ["rouge1", "rouge2", "rougeL", "bleu"]
+  save_predictions: true
+  confusion_matrix: true
+  
+# Deployment Settings
+deployment:
+  model_format: "safetensors"
+  include_tokenizer: true
+  compress: false

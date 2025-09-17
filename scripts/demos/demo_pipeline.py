@@ -5,11 +5,16 @@ Demo script for Combined Summarization + Sentiment Analysis Pipeline
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+# Add project root to path for legacy compatibility
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.models.pipeline import create_pipeline
-from config import config
+from app.core.config import get_config
+
+# Get configuration
+config = get_config()
 
 
 def demo_simple_pipeline():

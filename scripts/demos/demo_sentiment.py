@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""
-Demo script for Vietnamese Sentiment Analysis
-"""
+
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+# Add project root to path for legacy compatibility
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.models.sentiment import VietnameseSentimentAnalyzer, create_sentiment_analyzer
-from config import config
+from app.core.config import get_config
+
+# Get configuration
+config = get_config()
 
 def demo_single_prediction():
     """Demo single text sentiment prediction"""

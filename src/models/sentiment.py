@@ -9,8 +9,15 @@ from tqdm import tqdm
 from typing import List, Dict, Tuple, Optional, Union
 import sys
 
-sys.path.append(str(Path(__file__).parent.parent.parent))
-from config import config
+# Add project root to path for legacy compatibility
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
+from app.core.config import get_config
+
+# Get configuration
+config = get_config()
 
 
 class VietnameseSentimentAnalyzer:
@@ -42,9 +49,13 @@ class VietnameseSentimentAnalyzer:
         self.cache_dir = Path(cache_dir)
         
         if device is None:
+            # Try CUDA first, but be prepared for fallback
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
             self.device = torch.device(device)
+            
+        # Flag to track if we've fallen back to CPU
+        self.cuda_failed = False
             
         print(f"Using device: {self.device}")
         print(f"Model path: {self.model_path}")
@@ -74,6 +85,10 @@ class VietnameseSentimentAnalyzer:
                     local_files_only=True  # Use only local files
                 )
                 
+                # Ensure tokenizer has required special tokens
+                if self.tokenizer.pad_token is None:
+                    self.tokenizer.pad_token = self.tokenizer.eos_token
+                
                 # Load model
                 self.model = AutoModelForSequenceClassification.from_pretrained(
                     self.model_path,
@@ -81,16 +96,32 @@ class VietnameseSentimentAnalyzer:
                     local_files_only=True  # Use only local files
                 )
                 
-                # Move model to device
-                self.model.to(self.device)
+                # Try to move model to device with error handling
+                try:
+                    self.model.to(self.device)
+                    # Resize token embeddings if needed
+                    self.model.resize_token_embeddings(len(self.tokenizer))
+                except RuntimeError as e:
+                    if "CUDA" in str(e):
+                        print(f"CUDA error during model loading: {e}")
+                        print("Falling back to CPU...")
+                        self.device = torch.device('cpu')
+                        self.cuda_failed = True
+                        self.model.to(self.device)
+                        self.model.resize_token_embeddings(len(self.tokenizer))
+                    else:
+                        raise
+                
                 self.model.eval()
                 
                 print(f"✅ Sentiment model loaded successfully")
                 print(f"   Model: {self.model_path}")
                 print(f"   Vocab size: {len(self.tokenizer)}")
+                print(f"   Device: {self.device}")
                 
             except Exception as e:
                 print(f"❌ Error loading sentiment model: {e}")
+                raise
                 print(f"   Make sure the model files exist at: {self.model_path}")
                 raise
                 
@@ -119,11 +150,32 @@ class VietnameseSentimentAnalyzer:
             return_tensors="pt"
         ).to(self.device)
         
-        # Get predictions
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
-            predicted_class = torch.argmax(probabilities, dim=-1).item()
+        # Get predictions with CUDA error handling
+        try:
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
+                predicted_class = torch.argmax(probabilities, dim=-1).item()
+        except RuntimeError as e:
+            if "CUDA" in str(e) and self.device.type == "cuda" and not self.cuda_failed:
+                print(f"CUDA error during prediction: {e}")
+                print("Moving model to CPU and retrying...")
+                
+                # Move model to CPU
+                self.model = self.model.cpu()
+                self.device = torch.device('cpu')
+                self.cuda_failed = True
+                
+                # Move inputs to CPU and retry
+                inputs = {k: v.cpu() for k, v in inputs.items()}
+                
+                with torch.no_grad():
+                    outputs = self.model(**inputs)
+                    probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
+                    predicted_class = torch.argmax(probabilities, dim=-1).item()
+            else:
+                print(f"Prediction error: {e}")
+                raise
             
         if return_probabilities:
             return {
@@ -286,7 +338,7 @@ class VietnameseSentimentAnalyzer:
         }
 
 
-def create_sentiment_analyzer(checkpoint: str = "latest") -> VietnameseSentimentAnalyzer:
+def create_sentiment_analyzer(checkpoint: str = "1182") -> VietnameseSentimentAnalyzer:
     """
     Create a Vietnamese sentiment analyzer with specified checkpoint
     
@@ -296,17 +348,19 @@ def create_sentiment_analyzer(checkpoint: str = "latest") -> VietnameseSentiment
     Returns:
         VietnameseSentimentAnalyzer instance
     """
+    # Since config now points to specific checkpoint, use it directly for default
     if checkpoint == "1182":
-        model_path = config.sentiment_model_dir / "checkpoint-1182"
+        # Use the config default which is already checkpoint-1182
+        model_path = config.sentiment_model_dir
     elif checkpoint == "788":
-        model_path = config.sentiment_model_dir / "checkpoint-788"
+        # For other checkpoints, go up one level and then to specific checkpoint
+        model_path = config.sentiment_model_dir.parent / "checkpoint-788"
     else:
         model_path = config.sentiment_model_dir
         
     return VietnameseSentimentAnalyzer(model_path=model_path)
 
-
-def quick_sentiment_analysis(text: str, checkpoint: str = "latest") -> str:
+def quick_sentiment_analysis(text: str, checkpoint: str = "1182") -> str:
     """
     Quick sentiment analysis for a single text
     

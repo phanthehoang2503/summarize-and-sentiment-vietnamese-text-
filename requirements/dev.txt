@@ -1,0 +1,21 @@
+# Development dependencies
+-r base.txt
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+
+# Code quality
+black>=23.7.0
+isort>=5.12.0
+flake8>=6.0.0
+mypy>=1.5.0
+
+# Development tools
+pre-commit>=3.3.3
+jupyter>=1.0.0
+
+# Visualization (for development/analysis)
+matplotlib>=3.7.0
+seaborn>=0.12.0

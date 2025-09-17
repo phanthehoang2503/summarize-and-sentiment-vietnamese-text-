@@ -1,23 +1,17 @@
-"""
-Demo script showcasing the VietnameseSummarizer class
-Run this to test your model with custom text or sample data
-"""
-
 import sys
+import traceback
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+# Add project root to path for legacy compatibility
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-try:
-    from models import VietnameseSummarizer, create_summarizer, quick_summarize
-    print("Successfully imported VietnameseSummarizer!")
-except ImportError as e:
-    print(f"Import error: {e}")
-    sys.exit(1)
+from src.models.summarizer import VietnameseSummarizer, create_summarizer
 
 
 def demo_quick_usage():
-    """Demo the quick_summarize function"""
+    """Demo the quick summarization function"""
     print("\n" + "="*60)
     print("DEMO 1: Quick Summarization")
     print("="*60)
@@ -34,7 +28,8 @@ def demo_quick_usage():
     print(sample_text.strip())
     
     print("\nGenerating summary...")
-    summary = quick_summarize(sample_text)
+    summarizer = create_summarizer()
+    summary = summarizer.summarize(sample_text)
     
     print(f"\nGenerated summary:")
     print(f"'{summary}'")
@@ -48,7 +43,7 @@ def demo_class_usage():
     print("="*60)
     
     print("Creating summarizer...")
-    summarizer = create_summarizer(checkpoint="1854")
+    summarizer = create_summarizer()
     
     info = summarizer.get_model_info()
     print(f"\nModel Info:")
@@ -145,7 +140,6 @@ def main():
         
     except Exception as e:
         print(f"\nDemo failed: {e}")
-        import traceback
         traceback.print_exc()
 
 
