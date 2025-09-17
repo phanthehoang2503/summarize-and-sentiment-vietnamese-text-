@@ -1,221 +1,158 @@
-# src/models/sentiment.py
-
+"""
+Vietnamese Sentiment Analysis Model
+Clean implementation with robust error handling
+"""
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from pathlib import Path
-import pandas as pd
-import numpy as np
-from tqdm import tqdm
-from typing import List, Dict, Tuple, Optional, Union
-import sys
-
-# Add project root to path for legacy compatibility
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
+import logging
+from typing import Dict, Optional, Union, List
+import warnings
 
 from app.core.config import get_config
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Suppress transformer warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="transformers")
 
 # Get configuration
 config = get_config()
 
 
 class VietnameseSentimentAnalyzer:
-    """
-    Vietnamese Sentiment Analysis Model using PhoBERT
-    
-    This class provides sentiment analysis for Vietnamese text using a fine-tuned PhoBERT model.
-    Supports binary sentiment classification (positive/negative) or multi-class sentiment.
-    """
+    """Vietnamese Sentiment Analysis using fine-tuned PhoBERT"""
     
     def __init__(self, 
                  model_path: Optional[str] = None,
                  cache_dir: Optional[str] = None,
                  device: Optional[str] = None):
-        """
-        Initialize Vietnamese Sentiment Analyzer
+        """Initialize sentiment analyzer with robust device handling"""
         
-        Args:
-            model_path: Path to the trained sentiment model (defaults to config)
-            cache_dir: Cache directory for models (defaults to config)
-            device: Device to use ('cuda', 'cpu', or None for auto-detect)
-        """
-        if model_path is None:
-            model_path = config.sentiment_model_dir
-        if cache_dir is None:
-            cache_dir = config.sentiment_cache_dir
-            
-        self.model_path = Path(model_path)
-        self.cache_dir = Path(cache_dir)
+        self.model_path = Path(model_path or config.sentiment_model_dir)
+        self.cache_dir = Path(cache_dir or config.sentiment_cache_dir)
         
-        if device is None:
-            # Try CUDA first, but be prepared for fallback
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        else:
+        # Device setup with fallback
+        if device:
             self.device = torch.device(device)
+        else:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             
-        # Flag to track if we've fallen back to CPU
-        self.cuda_failed = False
-            
-        print(f"Using device: {self.device}")
-        print(f"Model path: {self.model_path}")
-        
         self.model = None
         self.tokenizer = None
-        self.label_mapping = {
-            0: "NEG",
-            1: "NEU",
-            2: "POS"
-        }
+        self._model_loaded = False
         
-    def load_model(self):
-        """Load the sentiment model and tokenizer"""
-        if self.model is None:
-            print("Loading sentiment model...")
+        # Sentiment labels - clear and consistent
+        self.label_mapping = {0: "NEG", 1: "NEU", 2: "POS"}
+        
+        logger.info(f"SentimentAnalyzer initialized - Device: {self.device}, Model: {self.model_path}")
+        
+    def _validate_model_path(self) -> bool:
+        """Validate model files exist"""
+        required_files = ['config.json']
+        # Check for either pytorch_model.bin or model.safetensors
+        model_files = ['pytorch_model.bin', 'model.safetensors']
+        has_model_file = any((self.model_path / f).exists() for f in model_files)
+        
+        for file in required_files:
+            if not (self.model_path / file).exists():
+                logger.error(f"Missing model file: {file}")
+                return False
+                
+        if not has_model_file:
+            logger.error(f"Missing model weights file (pytorch_model.bin or model.safetensors)")
+            return False
             
+        return True
+        
+    def load_model(self) -> bool:
+        """Load model with comprehensive error handling"""
+        if self._model_loaded:
+            return True
+            
+        try:
+            if not self._validate_model_path():
+                raise FileNotFoundError(f"Model files not found at {self.model_path}")
+                
+            logger.info("Loading sentiment model...")
+            
+            # Load tokenizer first
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.model_path,
+                cache_dir=self.cache_dir,
+                local_files_only=True
+            )
+            
+            # Ensure pad token exists
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            # Load model with device-aware error handling
+            self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.model_path,
+                cache_dir=self.cache_dir,
+                local_files_only=True
+            )
+            
+            # Move to device with fallback
             try:
-                # Import here to avoid dependency issues at module level
-                import os
-                os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Disable oneDNN for compatibility
-                
-                # Load tokenizer
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    self.model_path,
-                    cache_dir=self.cache_dir,
-                    local_files_only=True  # Use only local files
-                )
-                
-                # Ensure tokenizer has required special tokens
-                if self.tokenizer.pad_token is None:
-                    self.tokenizer.pad_token = self.tokenizer.eos_token
-                
-                # Load model
-                self.model = AutoModelForSequenceClassification.from_pretrained(
-                    self.model_path,
-                    cache_dir=self.cache_dir,
-                    local_files_only=True  # Use only local files
-                )
-                
-                # Try to move model to device with error handling
-                try:
+                self.model.to(self.device)
+                self.model.resize_token_embeddings(len(self.tokenizer))
+            except RuntimeError as e:
+                if "CUDA" in str(e) and self.device.type == "cuda":
+                    logger.warning(f"CUDA error: {e}. Falling back to CPU")
+                    self.device = torch.device('cpu')
                     self.model.to(self.device)
-                    # Resize token embeddings if needed
                     self.model.resize_token_embeddings(len(self.tokenizer))
-                except RuntimeError as e:
-                    if "CUDA" in str(e):
-                        print(f"CUDA error during model loading: {e}")
-                        print("Falling back to CPU...")
-                        self.device = torch.device('cpu')
-                        self.cuda_failed = True
-                        self.model.to(self.device)
-                        self.model.resize_token_embeddings(len(self.tokenizer))
-                    else:
-                        raise
-                
-                self.model.eval()
-                
-                print(f"✅ Sentiment model loaded successfully")
-                print(f"   Model: {self.model_path}")
-                print(f"   Vocab size: {len(self.tokenizer)}")
-                print(f"   Device: {self.device}")
-                
-            except Exception as e:
-                print(f"❌ Error loading sentiment model: {e}")
-                raise
-                print(f"   Make sure the model files exist at: {self.model_path}")
-                raise
-                
+                else:
+                    raise
+                    
+            self.model.eval()
+            self._model_loaded = True
+            
+            logger.info(f"Sentiment model loaded successfully on {self.device}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to load sentiment model: {e}")
+            return False
+            
+    def _validate_text_input(self, text: str) -> bool:
+        """Validate input text"""
+        if not isinstance(text, str):
+            return False
+        if not text.strip():
+            return False
+        if len(text) > 10000:  # Reasonable limit
+            return False
+        return True
+        
     def predict_sentiment(self, 
                          text: str, 
-                         return_probabilities: bool = False) -> Union[str, Dict]:
+                         return_probabilities: bool = False) -> Union[str, Dict, None]:
         """
-        Predict sentiment for a single text
+        Predict sentiment for text with robust error handling
         
         Args:
             text: Input Vietnamese text
-            return_probabilities: If True, return probabilities for all classes
+            return_probabilities: If True, return detailed results
             
         Returns:
-            Predicted sentiment label or dict with probabilities
+            Sentiment label (str) or detailed dict, None on error
         """
-        if self.model is None:
-            self.load_model()
+        if not self._validate_text_input(text):
+            logger.warning("Invalid input text for sentiment analysis")
+            return None
             
-        # Tokenize input
-        inputs = self.tokenizer(
-            text,
-            truncation=True,
-            padding=True,
-            max_length=512,
-            return_tensors="pt"
-        ).to(self.device)
-        
-        # Get predictions with CUDA error handling
+        if not self._model_loaded and not self.load_model():
+            logger.error("Model not loaded and failed to load")
+            return None
+            
         try:
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
-                predicted_class = torch.argmax(probabilities, dim=-1).item()
-        except RuntimeError as e:
-            if "CUDA" in str(e) and self.device.type == "cuda" and not self.cuda_failed:
-                print(f"CUDA error during prediction: {e}")
-                print("Moving model to CPU and retrying...")
-                
-                # Move model to CPU
-                self.model = self.model.cpu()
-                self.device = torch.device('cpu')
-                self.cuda_failed = True
-                
-                # Move inputs to CPU and retry
-                inputs = {k: v.cpu() for k, v in inputs.items()}
-                
-                with torch.no_grad():
-                    outputs = self.model(**inputs)
-                    probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
-                    predicted_class = torch.argmax(probabilities, dim=-1).item()
-            else:
-                print(f"Prediction error: {e}")
-                raise
-            
-        if return_probabilities:
-            return {
-                'predicted_label': self.label_mapping[predicted_class],
-                'predicted_class': predicted_class,
-                'probabilities': {
-                    label: prob.item() 
-                    for label, prob in zip(self.label_mapping.values(), probabilities[0])
-                },
-                'confidence': probabilities[0][predicted_class].item()
-            }
-        else:
-            return self.label_mapping[predicted_class]
-    
-    def predict_batch(self, 
-                     texts: List[str], 
-                     batch_size: int = 16,
-                     return_probabilities: bool = False) -> List[Union[str, Dict]]:
-        """
-        Predict sentiments for a batch of texts
-        
-        Args:
-            texts: List of Vietnamese texts
-            batch_size: Batch size for processing
-            return_probabilities: If True, return probabilities for all classes
-            
-        Returns:
-            List of predicted sentiment labels or dicts with probabilities
-        """
-        if self.model is None:
-            self.load_model()
-            
-        results = []
-        
-        for i in tqdm(range(0, len(texts), batch_size), desc="Analyzing sentiment"):
-            batch_texts = texts[i:i + batch_size]
-            
-            # Tokenize batch
+            # Tokenize with safe parameters
             inputs = self.tokenizer(
-                batch_texts,
+                text,
                 truncation=True,
                 padding=True,
                 max_length=512,
@@ -226,170 +163,69 @@ class VietnameseSentimentAnalyzer:
             with torch.no_grad():
                 outputs = self.model(**inputs)
                 probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
-                predicted_classes = torch.argmax(probabilities, dim=-1)
+                predicted_class = torch.argmax(probabilities, dim=-1).item()
+            
+            if return_probabilities:
+                return {
+                    'predicted_label': self.label_mapping[predicted_class],
+                    'confidence': probabilities[0][predicted_class].item(),
+                    'probabilities': {
+                        label: probabilities[0][idx].item() 
+                        for idx, label in self.label_mapping.items()
+                    }
+                }
+            else:
+                return self.label_mapping[predicted_class]
                 
-            # Process results
-            for j, pred_class in enumerate(predicted_classes):
-                pred_class = pred_class.item()
+        except Exception as e:
+            logger.error(f"Sentiment prediction error: {e}")
+            return None
+            
+    def analyze_batch(self, texts: List[str], batch_size: int = 16) -> List[Optional[str]]:
+        """Analyze sentiment for multiple texts efficiently"""
+        if not self._model_loaded and not self.load_model():
+            return [None] * len(texts)
+            
+        results = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            batch_results = []
+            
+            for text in batch:
+                result = self.predict_sentiment(text)
+                batch_results.append(result)
                 
-                if return_probabilities:
-                    results.append({
-                        'predicted_label': self.label_mapping[pred_class],
-                        'predicted_class': pred_class,
-                        'probabilities': {
-                            label: prob.item() 
-                            for label, prob in zip(self.label_mapping.values(), probabilities[j])
-                        },
-                        'confidence': probabilities[j][pred_class].item()
-                    })
-                else:
-                    results.append(self.label_mapping[pred_class])
-                    
+            results.extend(batch_results)
+            
         return results
-    
-    def analyze_dataset(self, 
-                       dataset_path: Optional[str] = None,
-                       text_column: str = 'text',
-                       batch_size: int = 16,
-                       sample_size: Optional[int] = None) -> pd.DataFrame:
-        """
-        Analyze sentiment for a dataset
-        
-        Args:
-            dataset_path: Path to dataset CSV file (defaults to config)
-            text_column: Name of the text column
-            batch_size: Batch size for processing
-            sample_size: Number of samples to analyze (None for all)
-            
-        Returns:
-            DataFrame with sentiment predictions
-        """
-        # Load dataset
-        if dataset_path is None:
-            dataset_path = config.sentiment_data
-            
-        print(f"Loading dataset from: {dataset_path}")
-        df = pd.read_csv(dataset_path)
-        print(f"Loaded {len(df)} samples")
-        
-        # Sample data if requested
-        if sample_size and sample_size < len(df):
-            df = df.sample(n=sample_size, random_state=42)
-            print(f"Sampled {len(df)} samples for analysis")
-            
-        # Get predictions
-        texts = df[text_column].tolist()
-        predictions = self.predict_batch(texts, batch_size=batch_size, return_probabilities=True)
-        
-        # Add predictions to dataframe
-        df = df.copy()
-        df['predicted_sentiment'] = [pred['predicted_label'] for pred in predictions]
-        df['confidence'] = [pred['confidence'] for pred in predictions]
-        df['pos_prob'] = [pred['probabilities']['POS'] for pred in predictions]
-        df['neg_prob'] = [pred['probabilities']['NEG'] for pred in predictions]
-        df['neu_prob'] = [pred['probabilities']['NEU'] for pred in predictions]
-        
-        return df
-    
-    def evaluate_model(self, 
-                      dataset_path: Optional[str] = None,
-                      text_column: str = 'text',
-                      label_column: str = 'label',
-                      batch_size: int = 16) -> Dict:
-        """
-        Evaluate model performance on a labeled dataset
-        
-        Args:
-            dataset_path: Path to labeled dataset
-            text_column: Name of the text column
-            label_column: Name of the label column
-            batch_size: Batch size for processing
-            
-        Returns:
-            Dictionary with evaluation metrics
-        """
-        # Load dataset
-        if dataset_path is None:
-            dataset_path = config.sentiment_data
-            
-        df = pd.read_csv(dataset_path)
-        
-        # Get predictions
-        predictions = self.predict_batch(df[text_column].tolist(), batch_size=batch_size)
-        
-        # Calculate metrics
-        from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
-        
-        true_labels = df[label_column].tolist()
-        
-        # Convert labels to strings if needed
-        if isinstance(true_labels[0], (int, float)):
-            true_labels = [self.label_mapping[int(label)] for label in true_labels]
-            
-        accuracy = accuracy_score(true_labels, predictions)
-        precision, recall, f1, _ = precision_recall_fscore_support(true_labels, predictions, average='weighted')
-        
-        return {
-            'accuracy': accuracy,
-            'precision': precision,
-            'recall': recall,
-            'f1_score': f1,
-            'confusion_matrix': confusion_matrix(true_labels, predictions).tolist()
-        }
 
 
-def create_sentiment_analyzer(checkpoint: str = "1182") -> VietnameseSentimentAnalyzer:
+def create_sentiment_analyzer(**kwargs) -> VietnameseSentimentAnalyzer:
     """
-    Create a Vietnamese sentiment analyzer with specified checkpoint
+    Factory function to create a sentiment analyzer instance
     
     Args:
-        checkpoint: Checkpoint to use ("latest", "1182", "788")
+        **kwargs: Optional arguments to pass to VietnameseSentimentAnalyzer
         
     Returns:
-        VietnameseSentimentAnalyzer instance
+        Configured VietnameseSentimentAnalyzer instance
     """
-    # Since config now points to specific checkpoint, use it directly for default
-    if checkpoint == "1182":
-        # Use the config default which is already checkpoint-1182
-        model_path = config.sentiment_model_dir
-    elif checkpoint == "788":
-        # For other checkpoints, go up one level and then to specific checkpoint
-        model_path = config.sentiment_model_dir.parent / "checkpoint-788"
-    else:
-        model_path = config.sentiment_model_dir
-        
-    return VietnameseSentimentAnalyzer(model_path=model_path)
+    return VietnameseSentimentAnalyzer(**kwargs)
 
-def quick_sentiment_analysis(text: str, checkpoint: str = "1182") -> str:
+
+def quick_sentiment_analysis(text: str) -> Optional[str]:
     """
     Quick sentiment analysis for a single text
     
     Args:
-        text: Vietnamese text to analyze
-        checkpoint: Model checkpoint to use
+        text: Input Vietnamese text
         
     Returns:
-        Predicted sentiment label
+        Sentiment label (POS/NEG/NEU) or None if analysis fails
     """
-    analyzer = create_sentiment_analyzer(checkpoint)
-    return analyzer.predict_sentiment(text)
-
-
-if __name__ == "__main__":  
-    # Create analyzer
-    analyzer = create_sentiment_analyzer()
-    
-    # Test with sample texts
-    test_texts = [
-        "Tôi rất hài lòng với sản phẩm này, chất lượng tuyệt vời!",
-        "Dịch vụ khách hàng tệ quá, tôi rất thất vọng.",
-        "Món ăn ngon, giá cả hợp lý, nhân viên thân thiện.",
-        "Chất lượng sản phẩm không như mong đợi, rất tệ."
-    ]
-    
-    print("\nsample sentiment analysis:")
-    for text in test_texts:
-        result = analyzer.predict_sentiment(text, return_probabilities=True)
-        print(f"Text: {text}")
-        print(f"Sentiment: {result['predicted_label']} (confidence: {result['confidence']:.3f})")
-        print("---")
+    try:
+        analyzer = create_sentiment_analyzer()
+        return analyzer.predict_sentiment(text)
+    except Exception as e:
+        logger.error(f"Quick sentiment analysis failed: {e}")
+        return None

@@ -5,6 +5,7 @@ Business logic for Vietnamese text summarization and sentiment analysis
 from typing import Dict, Any, Optional
 import time
 import logging
+import threading
 from pathlib import Path
 
 # Import models with proper error handling
@@ -19,37 +20,87 @@ except ImportError as e:
 
 class TextAnalysisService:
     """
-    Service class that encapsulates all text analysis business logic.
+    Service class with thread-safe singleton model loading for demo use.
     Provides a clean interface for the web layer.
     """
     
     def __init__(self):
-        """Initialize the text analysis service with lazy loading"""
+        """Initialize the text analysis service with thread-safe lazy loading"""
         self._sentiment_analyzer = None
         self._summarizer = None
         self._pipeline = None
+        self._lock = threading.Lock()  # For thread-safe initialization
         self.logger = logging.getLogger(__name__)
+        self._initialization_errors = {}
     
     @property
     def sentiment_analyzer(self):
-        """Lazy-loaded sentiment analyzer"""
+        """Thread-safe lazy-loaded sentiment analyzer"""
         if self._sentiment_analyzer is None:
-            self._sentiment_analyzer = create_sentiment_analyzer()
+            with self._lock:
+                if self._sentiment_analyzer is None:  # Double-check pattern
+                    try:
+                        self.logger.info("Initializing sentiment analyzer...")
+                        self._sentiment_analyzer = create_sentiment_analyzer()
+                        self.logger.info("Sentiment analyzer loaded successfully")
+                    except Exception as e:
+                        self.logger.error(f"Failed to load sentiment analyzer: {e}")
+                        self._initialization_errors['sentiment'] = str(e)
+                        raise
         return self._sentiment_analyzer
     
     @property
     def summarizer(self):
-        """Lazy-loaded summarizer"""
+        """Thread-safe lazy-loaded summarizer"""
         if self._summarizer is None:
-            self._summarizer = create_summarizer()
+            with self._lock:
+                if self._summarizer is None:  # Double-check pattern
+                    try:
+                        self.logger.info("Initializing summarizer...")
+                        self._summarizer = create_summarizer()
+                        self.logger.info("Summarizer loaded successfully")
+                    except Exception as e:
+                        self.logger.error(f"Failed to load summarizer: {e}")
+                        self._initialization_errors['summarizer'] = str(e)
+                        raise
         return self._summarizer
     
     @property
     def pipeline(self):
-        """Lazy-loaded combined pipeline"""
+        """Thread-safe lazy-loaded combined pipeline"""
         if self._pipeline is None:
-            self._pipeline = SummarizationSentimentPipeline()
+            with self._lock:
+                if self._pipeline is None:  # Double-check pattern
+                    try:
+                        self.logger.info("Initializing combined pipeline...")
+                        self._pipeline = SummarizationSentimentPipeline()
+                        self.logger.info("Combined pipeline loaded successfully")
+                    except Exception as e:
+                        self.logger.error(f"Failed to load pipeline: {e}")
+                        self._initialization_errors['pipeline'] = str(e)
+                        raise
         return self._pipeline
+    
+    def get_service_status(self) -> Dict[str, Any]:
+        """Get status of all services for health checks"""
+        status = {
+            'services': {
+                'sentiment_analyzer': 'not_loaded',
+                'summarizer': 'not_loaded', 
+                'pipeline': 'not_loaded'
+            },
+            'errors': self._initialization_errors.copy()
+        }
+        
+        # Check what's currently loaded
+        if self._sentiment_analyzer is not None:
+            status['services']['sentiment_analyzer'] = 'loaded'
+        if self._summarizer is not None:
+            status['services']['summarizer'] = 'loaded'
+        if self._pipeline is not None:
+            status['services']['pipeline'] = 'loaded'
+            
+        return status
     
     def is_vietnamese_text(self, text: str) -> bool:
         """Simple Vietnamese text detection"""

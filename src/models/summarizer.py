@@ -151,8 +151,11 @@ class VietnameseSummarizer:
         # Add Vietnamese summarization prompt
         prompted_text = f"Tóm tắt: {text.strip()}"
         
-        # Get generation settings from config
-        gen_config = config.generation['summarization']
+        # Get generation settings from config (with fallbacks)
+        try:
+            gen_config = config.params.get('demo', {}).get('generation', {})
+        except:
+            gen_config = {}  # Fallback to empty dict if config missing
         
         # Set defaults from config if not provided, with mode-specific overrides
         if max_length is None:

@@ -1,12 +1,20 @@
 # scripts/demo.py
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
+import os
 
 class VietnameseSummarizer:
-    def __init__(self, model_path="../models/summarizer/checkpoint-1854"):
+    def __init__(self, model_path=None):
         """Initialize the summarizer"""
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
+        # Use absolute path to model
+        if model_path is None:
+            # Get the project root (two levels up from scripts/demos)
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            model_path = os.path.join(project_root, "models", "summarizer", "checkpoint-2166")
+        
+        print(f"Loading model from: {model_path}")
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(model_path).to(self.device)
     

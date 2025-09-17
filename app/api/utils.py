@@ -3,29 +3,41 @@ Health check and utility API routes
 """
 from flask import Blueprint, jsonify
 import sys
+import logging
 from pathlib import Path
 
-from app.core.config import settings
+from app.core.config import get_config
 
 # Create blueprint for utility APIs
 utils_bp = Blueprint('utils', __name__, url_prefix='/api')
+logger = logging.getLogger(__name__)
 
 
 @utils_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'version': '1.0.0',
-        'python_version': sys.version,
-        'project_root': str(settings.project_root)
-    })
+    try:
+        config = get_config()
+        return jsonify({
+            'status': 'healthy',
+            'version': '1.0.0',
+            'python_version': sys.version,
+            'project_root': str(config.project_root)
+        })
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'unhealthy',
+            'error': 'Configuration error'
+        }), 500
 
 
 @utils_bp.route('/status', methods=['GET'])
 def system_status():
     """System status endpoint with more detailed information"""
     try:
+        config = get_config()
+        
         # Test model imports
         from app.core.services import text_analysis_service
         
@@ -38,18 +50,19 @@ def system_status():
                 'combined_pipeline': 'available'
             },
             'configuration': {
-                'project_root': str(settings.project_root),
-                'models_dir': str(settings.model_paths.sentiment_model_dir.parent),
-                'cache_dir': str(settings.model_paths.cache_dir)
+                'project_root': str(config.project_root),
+                'models_dir': str(config.model_paths.sentiment_model_dir.parent),
+                'cache_dir': str(config.model_paths.cache_dir)
             }
         }
         
         return jsonify(status)
         
     except Exception as e:
+        logger.error(f"System status check failed: {e}")
         return jsonify({
             'status': 'degraded',
-            'error': str(e),
+            'error': 'Service initialization error',
             'services': {
                 'text_analysis': 'error',
                 'summarization': 'error',

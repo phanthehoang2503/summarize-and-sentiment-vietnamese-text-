@@ -65,7 +65,13 @@ def demo_batch_prediction():
     
     print(f"Analyzing {len(batch_texts)} texts...")
     
-    results = analyzer.predict_batch(batch_texts, return_probabilities=True)
+    results = []
+    for text in batch_texts:
+        result = analyzer.predict_sentiment(text, return_probabilities=True)
+        if result:
+            results.append(result)
+        else:
+            results.append({"predicted_label": "UNK", "confidence": 0.0})
     
     print("\nResults:")
     for text, result in zip(batch_texts, results):

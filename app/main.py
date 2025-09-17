@@ -3,85 +3,116 @@ Vietnamese Text Analysis Web Application
 Clean Flask application with modular structure
 """
 import sys
-from pathlib import Path
-from flask import Flask, render_template, send_from_directory
 import logging
+from pathlib import Path
+from flask import Flask, render_template, request
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.core.config import settings
-from app.api.analysis import analysis_bp
-from app.api.utils import utils_bp
+from app.core.config import get_config
+
+def setup_logging():
+    """Configure logging for the application"""
+    config = get_config()
+    log_level = config.params.get('logging', {}).get('level', 'INFO')
+    
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),  # Console output
+            logging.FileHandler(config.logs_dir / 'app.log')  # File output
+        ]
+    )
+    
+    # Reduce noise from external libraries
+    logging.getLogger('transformers').setLevel(logging.WARNING)
+    logging.getLogger('torch').setLevel(logging.WARNING)
 
 
 def create_app(config_override=None):
-    """
-    Application factory pattern for creating Flask app
+    """Application factory pattern with proper logging setup"""
+    # Setup logging first
+    setup_logging()
+    logger = logging.getLogger(__name__)
     
-    Args:
-        config_override: Optional configuration overrides
+    try:
+        config = get_config()
+        logger.info("Starting Flask application creation")
         
-    Returns:
-        Configured Flask application
-    """
-    app = Flask(__name__,
-                template_folder=str(settings.templates_dir),
-                static_folder=str(settings.static_dir))
-    
-    # Configure app
-    app.config['SECRET_KEY'] = settings.app.secret_key
-    app.config['JSON_AS_ASCII'] = False  # Support Vietnamese characters
-    app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
-    
-    # Apply any configuration overrides
-    if config_override:
-        app.config.update(config_override)
-    
-    # Register blueprints
-    app.register_blueprint(analysis_bp)
-    app.register_blueprint(utils_bp)
-    
-    # Setup logging
-    if not app.debug:
-        logging.basicConfig(level=logging.INFO)
-    
-    # Main web routes
-    @app.route('/')
-    def index():
-        """Main page"""
-        return render_template('index.html')
-    
-    @app.route('/favicon.ico')
-    def favicon():
-        """Serve favicon"""
-        return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
-    
-    # Error handlers
-    @app.errorhandler(404)
-    def not_found_error(error):
-        return {'error': 'Not found'}, 404
-    
-    @app.errorhandler(500)
-    def internal_error(error):
-        return {'error': 'Internal server error'}, 500
-    
-    return app
+        app = Flask(__name__,
+                    template_folder=str(config.templates_dir),
+                    static_folder=str(config.static_dir))
+        
+        # Configure app
+        app.config.update({
+            'SECRET_KEY': config.app.secret_key,
+            'JSON_AS_ASCII': False,  # Support Vietnamese characters
+            'JSONIFY_PRETTYPRINT_REGULAR': True,
+            'MAX_CONTENT_LENGTH': 16 * 1024 * 1024  # 16MB limit
+        })
+        
+        # Apply any configuration overrides
+        if config_override:
+            app.config.update(config_override)
+            logger.info("Configuration overrides applied")
+        
+        # Register blueprints
+        from app.api.analysis import analysis_bp
+        from app.api.utils import utils_bp
+        
+        app.register_blueprint(analysis_bp)
+        app.register_blueprint(utils_bp)
+        logger.info("API blueprints registered successfully")
+        
+        # Main web routes
+        @app.route('/')
+        def index():
+            """Main page"""
+            logger.info("Index page requested")
+            return render_template('index.html')
+        
+        # Error handlers with logging
+        @app.errorhandler(404)
+        def not_found_error(error):
+            logger.warning(f"404 error: {request.url}")
+            return {'error': 'Resource not found'}, 404
+        
+        @app.errorhandler(500)
+        def internal_error(error):
+            logger.error(f"500 error: {error}", exc_info=True)
+            return {'error': 'Internal server error'}, 500
+        
+        @app.errorhandler(413)
+        def file_too_large(error):
+            logger.warning(f"File too large from {request.remote_addr}")
+            return {'error': 'File too large'}, 413
+        
+        logger.info("Flask application created successfully")
+        return app
+        
+    except Exception as e:
+        print(f"CRITICAL: Failed to create Flask app: {e}")
+        raise
 
 
 def main():
     """Main entry point for the web application"""
+    config = get_config()
+    
     print("🎓 Starting Vietnamese Text Analysis Academic Demo...")
-    print(f"📱 Open your browser and go to: http://{settings.app.host}:{settings.app.port}")
+    print(f"📱 Open your browser and go to: http://{config.app.host}:{config.app.port}")
     
     app = create_app()
     
     try:
         app.run(
-            host=settings.app.host,
-            port=settings.app.port,
-            debug=settings.app.debug,
+            host=config.app.host,
+            port=config.app.port,
+            debug=config.app.debug,
             use_reloader=False  # Prevent reloader issues with models
         )
     except KeyboardInterrupt:
