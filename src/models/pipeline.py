@@ -77,11 +77,6 @@ class SummarizationSentimentPipeline:
     def analyze(
         self,
         text: str,
-        # Summarization parameters
-        quality_mode: str = "balanced",  # Add quality_mode parameter
-        max_summary_length: int = 128,
-        min_summary_length: int = 10,
-        summarization_params: Optional[Dict] = None,
         # Sentiment parameters
         return_sentiment_probabilities: bool = True,
         # Pipeline parameters
@@ -95,9 +90,6 @@ class SummarizationSentimentPipeline:
         
         Args:
             text: Input Vietnamese text to analyze
-            max_summary_length: Maximum length of summary
-            min_summary_length: Minimum length of summary
-            summarization_params: Additional parameters for summarization
             return_sentiment_probabilities: Whether to return sentiment probabilities
             min_text_length_for_summary: Minimum text length to trigger summarization
             force_summarization: Force summarization even for short texts
@@ -134,22 +126,8 @@ class SummarizationSentimentPipeline:
                     # Step 1: Generate summary
                     print("Generating summary...")
                     
-                    # Prepare summarization parameters (conservative settings)
-                    sum_params = {
-                        "max_length": 300,  # More conservative than before
-                        "min_length": None,  # Use dynamic calculation
-                        "num_beams": 3,  # Reduced for stability
-                        "length_penalty": 1.0,  # Neutral
-                        "no_repeat_ngram_size": 2,  # Reduced
-                        "repetition_penalty": 1.1,  # Very conservative
-                        "early_stopping": True,
-                        "quality_mode": quality_mode  # Use the passed quality mode
-                    }
-                    
-                    if summarization_params:
-                        sum_params.update(summarization_params)
-                    
-                    summary = self.summarizer.summarize(text, **sum_params)
+                    # Use simplified API without quality_mode
+                    summary = self.summarizer.summarize(text)
                     
                     if not summary or len(summary.strip()) == 0 or len(summary.strip()) < 10:
                         print("Summary too short or empty, using original text for sentiment analysis")

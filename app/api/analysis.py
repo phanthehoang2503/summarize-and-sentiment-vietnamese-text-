@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 # Constants
 MAX_TEXT_LENGTH = 50000  # Maximum characters for text input
-ALLOWED_QUALITY_MODES = {'balanced', 'detailed'}
 ALLOWED_FILE_EXTENSIONS = {'.txt', '.md', '.doc', '.docx'}
 
 def generate_request_id():
@@ -34,12 +33,6 @@ def validate_text_input(text: str, request_id: str) -> tuple[bool, str]:
     
     return True, ""
 
-def validate_quality_mode(quality_mode: str) -> tuple[bool, str]:
-    """Validate quality mode parameter"""
-    if quality_mode not in ALLOWED_QUALITY_MODES:
-        return False, f"Invalid quality_mode. Must be one of: {', '.join(ALLOWED_QUALITY_MODES)}"
-    return True, ""
-
 
 @analysis_bp.route('/summarize', methods=['POST'])
 def api_summarize():
@@ -53,7 +46,6 @@ def api_summarize():
         
         data = request.get_json()
         text = data.get('text', '').strip()
-        quality_mode = data.get('quality_mode', 'balanced')
         
         # Validate inputs
         is_valid, error_msg = validate_text_input(text, request_id)
@@ -64,16 +56,8 @@ def api_summarize():
                 'request_id': request_id
             }), 400
         
-        is_valid, error_msg = validate_quality_mode(quality_mode)
-        if not is_valid:
-            return jsonify({
-                'success': False,
-                'error': error_msg, 
-                'request_id': request_id
-            }), 400
-        
-        logger.info(f"Request {request_id}: Processing text ({len(text)} chars, {quality_mode} mode)")
-        result = text_analysis_service.summarize_text(text, quality_mode=quality_mode)
+        logger.info(f"Request {request_id}: Processing text ({len(text)} chars)")
+        result = text_analysis_service.summarize_text(text)
         
         result['request_id'] = request_id
         if result['success']:
@@ -160,7 +144,6 @@ def api_analyze():
         
         data = request.get_json()
         text = data.get('text', '').strip()
-        quality_mode = data.get('quality_mode', 'balanced')
         
         # Validate inputs
         is_valid, error_msg = validate_text_input(text, request_id)
@@ -171,16 +154,8 @@ def api_analyze():
                 'request_id': request_id
             }), 400
         
-        is_valid, error_msg = validate_quality_mode(quality_mode)
-        if not is_valid:
-            return jsonify({
-                'success': False,
-                'error': error_msg,
-                'request_id': request_id
-            }), 400
-        
-        logger.info(f"Request {request_id}: Processing combined analysis ({len(text)} chars, {quality_mode} mode)")
-        result = text_analysis_service.analyze_combined(text, quality_mode=quality_mode)
+        logger.info(f"Request {request_id}: Processing combined analysis ({len(text)} chars)")
+        result = text_analysis_service.analyze_combined(text)
         
         result['request_id'] = request_id
         if result['success']:

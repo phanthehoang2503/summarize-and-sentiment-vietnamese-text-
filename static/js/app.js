@@ -80,7 +80,6 @@ class VietnameseTextAnalyzer {
 
     async performAnalysis(type) {
         const text = document.getElementById('textInput').value.trim();
-        const qualityMode = document.getElementById('qualityMode').value;
         
         if (!text) {
             this.showError('Vui lòng nhập văn bản để phân tích');
@@ -97,14 +96,12 @@ class VietnameseTextAnalyzer {
             switch (type) {
                 case 'summarize':
                     endpoint = '/api/summarize';
-                    requestBody.quality_mode = qualityMode;
                     break;
                 case 'sentiment':
                     endpoint = '/api/sentiment';
                     break;
                 case 'analyze':
                     endpoint = '/api/analyze';
-                    requestBody.quality_mode = qualityMode;
                     break;
                 default:
                     throw new Error('Invalid analysis type');

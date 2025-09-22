@@ -119,13 +119,12 @@ class TextAnalysisService:
         """Simple token counting"""
         return len(text.split())
     
-    def summarize_text(self, text: str, quality_mode: str = "balanced") -> Dict[str, Any]:
+    def summarize_text(self, text: str) -> Dict[str, Any]:
         """
         Generate summary for Vietnamese text
         
         Args:
             text: Input Vietnamese text
-            quality_mode: Summary quality ("balanced", "detailed")
             
         Returns:
             Dictionary with summary results and metadata
@@ -136,16 +135,11 @@ class TextAnalysisService:
             if not text or not text.strip():
                 raise ValueError("Text is required")
             
-            # Validate quality mode
-            valid_modes = ["balanced", "detailed"]
-            if quality_mode not in valid_modes:
-                quality_mode = "balanced"
-            
             # Check if text is Vietnamese
             is_vietnamese = self.is_vietnamese_text(text)
             
-            # Generate summary with quality mode
-            summary = self.summarizer.summarize(text, quality_mode=quality_mode)
+            # Generate summary with default settings
+            summary = self.summarizer.summarize(text)
             
             processing_time = time.time() - start_time
             
@@ -153,7 +147,6 @@ class TextAnalysisService:
                 'success': True,
                 'result': {
                     'summary': summary,
-                    'quality_mode': quality_mode,
                     'original_length': len(text),
                     'summary_length': len(summary),
                     'original_tokens': self.count_tokens(text),
@@ -216,13 +209,12 @@ class TextAnalysisService:
                 'processing_time': round(processing_time, 3)
             }
     
-    def analyze_combined(self, text: str, quality_mode: str = "balanced") -> Dict[str, Any]:
+    def analyze_combined(self, text: str) -> Dict[str, Any]:
         """
         Perform combined summarization and sentiment analysis
         
         Args:
             text: Input Vietnamese text
-            quality_mode: Summary quality ("balanced", "detailed")
             
         Returns:
             Dictionary with both summary and sentiment results
@@ -233,16 +225,11 @@ class TextAnalysisService:
             if not text or not text.strip():
                 raise ValueError("Text is required")
             
-            # Validate quality mode
-            valid_modes = ["balanced", "detailed"]
-            if quality_mode not in valid_modes:
-                quality_mode = "balanced"
-            
             # Check if text is Vietnamese
             is_vietnamese = self.is_vietnamese_text(text)
             
-            # Run combined pipeline with quality mode
-            result = self.pipeline.analyze(text, quality_mode=quality_mode)
+            # Run combined pipeline with default settings
+            result = self.pipeline.analyze(text)
             
             # Check if pipeline returned an error
             if 'error' in result:

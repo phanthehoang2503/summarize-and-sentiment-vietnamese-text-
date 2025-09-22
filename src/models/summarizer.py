@@ -116,31 +116,12 @@ class VietnameseSummarizer:
         except Exception as e:
             raise RuntimeError(f"Failed to load model: {e}")
     
-    def summarize(
-        self, 
-        text: str, 
-        max_length: int = None,  # Will use config default if None
-        min_length: int = None,  # Will be calculated dynamically
-        num_beams: int = None,  # Will use config default if None
-        length_penalty: float = None,  # Will use config default if None
-        no_repeat_ngram_size: int = None,
-        repetition_penalty: float = None,  # Will use config default if None
-        early_stopping: bool = True,
-        quality_mode: str = None  # "concise", "balanced", "detailed"
-    ) -> str:
+    def summarize(self, text: str) -> str:
         """
-        Generate summary for a single text with configurable quality settings
+        Vietnamese text summarization with anti-hallucination controls
         
         Args:
             text: Input Vietnamese text to summarize
-            max_length: Maximum length of generated summary
-            min_length: Minimum length (auto-calculated if None)
-            num_beams: Number of beams for beam search
-            length_penalty: Length penalty for generation
-            no_repeat_ngram_size: Size of n-grams that cannot repeat
-            repetition_penalty: Penalty for repetition
-            early_stopping: Whether to stop early when all beams reach EOS
-            quality_mode: Quality preset ("concise", "balanced", "detailed")
             
         Returns:
             Generated summary as string
@@ -148,189 +129,138 @@ class VietnameseSummarizer:
         if not text or len(text.strip()) == 0:
             return ""
         
-        # Add Vietnamese summarization prompt
-        prompted_text = f"Tóm tắt: {text.strip()}"
-        
-        # Get generation settings from config (with fallbacks)
-        try:
-            gen_config = config.params.get('demo', {}).get('generation', {})
-        except:
-            gen_config = {}  # Fallback to empty dict if config missing
-        
-        # Set defaults from config if not provided, with mode-specific overrides
-        if max_length is None:
-            max_length = 200 if quality_mode == "detailed" else 100  # Reasonable limits
-        if num_beams is None:
-            num_beams = 3  # Keep consistent for quality
-        if length_penalty is None:
-            length_penalty = 0.9 if quality_mode == "detailed" else 0.7  # Favor shorter for balanced
-        if repetition_penalty is None:
-            repetition_penalty = 1.1  # Slightly higher to avoid repetition
-        if no_repeat_ngram_size is None:
-            no_repeat_ngram_size = 3  # Increase to avoid repetition
-        
-        # Apply quality mode (simplified)
-        if quality_mode is None:
-            quality_mode = "balanced"
-        
-        # Calculate text length for later use
+        text = text.strip()
         text_length = len(text)
         
-        # Calculate dynamic min_length based on quality mode and text length  
-        if min_length is None:
-            if quality_mode == "balanced":
-                # Aim for 5-15% of original length (concise)
-                min_length = max(15, int(text_length * 0.05))
-                
-            elif quality_mode == "detailed":
-                # Aim for 20-40% of original length (more comprehensive)
-                min_length = max(30, int(text_length * 0.15))
-                
-            else:
-                # Fallback to balanced
-                min_length = max(15, int(text_length * 0.05))
+        # For very short texts, return as-is
+        if text_length < 200:
+            return text
         
-        # Ensure min_length is an integer
-        min_length = int(min_length)
+        # Fixed generation parameters to reduce hallucination
+        max_length = min(100, int(text_length * 0.3))  # 30% of original  
+        min_length = max(30, int(text_length * 0.15))  # 15% of original
         
-        # Calculate max_length based on compression ratio
-        if quality_mode == "balanced":
-            max_length = min(max_length, max(min_length + 20, int(text_length * 0.25)))  # 25% max
-        elif quality_mode == "detailed":
-            max_length = min(max_length, max(min_length + 30, int(text_length * 0.50)))  # 50% max
-        else:
-            max_length = min(max_length, max(min_length + 20, int(text_length * 0.25)))
+        # Conservative limits to prevent hallucination
+        max_length = min(max_length, 120)  # Hard cap
+        min_length = min(min_length, max_length - 10)
         
-        # Ensure max_length is reasonable and an integer
-        max_length = int(max_length)
-        max_length = max(max_length, min_length + 10)  # At least 10 chars more than min
+        # Simple prompt without excessive instruction
+        prompted_text = f"Tóm tắt: {text}"
         
-        # IMPORTANT: Ensure lengths don't exceed model limits
-        # ViT5 typically has a max length of 512 tokens
-        max_length = min(max_length, 256)  # Conservative limit for generation
-        min_length = min(min_length, max_length - 5)  # Ensure min < max
-        
-        # Ensure we have reasonable bounds
-        if min_length >= max_length:
-            min_length = max(1, max_length - 10)
-            
-        print(f"Generation params: min_length={min_length}, max_length={max_length}")
-            
-        # Tokenize input with prompt
+        # Tokenize with length check
         inputs = self.tokenizer(
             prompted_text,
             return_tensors="pt",
             truncation=True,
-            max_length=512,
+            max_length=400,  # Conservative input limit
             padding=True
         ).to(self.device)
         
-        # Check input token length to avoid issues
-        input_length = inputs['input_ids'].shape[1]
-        print(f"Input tokens: {input_length}")
-        
-        # Adjust max_length if input is very long
-        if input_length > 400:
-            max_length = min(max_length, 128)  # More conservative for long inputs
-            min_length = min(min_length, max_length - 5)
-        
-        # Generate summary with error handling
+        # Generate with conservative parameters to reduce hallucination
         try:
             with torch.no_grad():
                 summary_ids = self.model.generate(
                     **inputs,
                     max_length=max_length,
                     min_length=min_length,
-                    num_beams=num_beams,
-                    length_penalty=length_penalty,
-                    no_repeat_ngram_size=no_repeat_ngram_size,
-                    repetition_penalty=repetition_penalty,
-                    early_stopping=early_stopping,
+                    num_beams=2,  # Reduced beams for more focused generation
+                    length_penalty=1.2,  # Slight penalty for length
+                    repetition_penalty=1.2,  # Higher to avoid repetition
+                    no_repeat_ngram_size=3,
+                    early_stopping=True,
+                    do_sample=False,  # Deterministic
+                    temperature=1.0,  # Neutral temperature
                     pad_token_id=self.tokenizer.pad_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
-                    do_sample=False  # Use deterministic generation
+                    # Additional controls to reduce hallucination
+                    forced_eos_token_id=self.tokenizer.eos_token_id,
+                    suppress_tokens=None
                 )
-        except RuntimeError as e:
-            if "CUDA" in str(e) and self.device == "cuda" and not self.cuda_failed:
-                print(f"CUDA error encountered: {e}")
-                print("Falling back to CPU...")
-                # Move model to CPU and retry
-                self.model = self.model.cpu()
-                self.device = "cpu"
-                self.cuda_failed = True
-                inputs = {k: v.cpu() for k, v in inputs.items()}
-                
-                with torch.no_grad():
-                    summary_ids = self.model.generate(
-                        **inputs,
-                        max_length=min(64, max_length),
-                        min_length=min(10, min_length),
-                        num_beams=2,
-                        length_penalty=1.0,
-                        early_stopping=True,
-                        pad_token_id=self.tokenizer.pad_token_id,
-                        eos_token_id=self.tokenizer.eos_token_id,
-                        do_sample=False
-                    )
-            else:
-                print(f"Generation error: {e}")
-                # Fallback to very conservative settings
-                with torch.no_grad():
-                    summary_ids = self.model.generate(
-                        **inputs,
-                        max_length=min(64, max_length),
-                        min_length=min(10, min_length),
-                        num_beams=2,
-                        length_penalty=1.0,
-                        early_stopping=True,
-                        pad_token_id=self.tokenizer.pad_token_id,
-                        eos_token_id=self.tokenizer.eos_token_id,
-                        do_sample=False
-                    )
+        except Exception as e:
+            print(f"Generation error: {e}")
+            # Ultra-conservative fallback
+            with torch.no_grad():
+                summary_ids = self.model.generate(
+                    **inputs,
+                    max_length=min(60, max_length),
+                    min_length=min(20, min_length),
+                    num_beams=1,  # Greedy decoding
+                    early_stopping=True,
+                    do_sample=False
+                )
         
-        # Decode summary
+        # Decode and clean
         summary = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
         
-        # Clean up the summary - remove the prompt if it's included in output
+        # Remove prompt prefix
         if summary.startswith("Tóm tắt: "):
-            summary = summary[9:]  # Remove "Tóm tắt: " prefix
+            summary = summary[9:].strip()
         
-        # Additional cleanup - remove any text that looks like it's repeating the prompt
-        summary = summary.strip()
-        
-        # Apply quality-aware post-processing only if summary is problematic
-        if len(summary) >= len(text):
-            # Force summarization respecting quality mode
-            sentences = summary.split('. ')
-            if len(sentences) > 1:
-                if quality_mode == "detailed":
-                    # Take first 2-3 sentences for detailed mode
-                    num_sentences = min(3, len(sentences))
-                    summary = '. '.join(sentences[:num_sentences])
-                    if not summary.endswith('.'):
-                        summary += '.'
-                else:
-                    # Take first sentence for balanced mode
-                    summary = sentences[0] + '.'
-            else:
-                # Fallback: respect quality mode ratios
-                if quality_mode == "detailed":
-                    summary = summary[:int(len(text) * 0.7)]  # 70% for detailed
-                else:
-                    summary = summary[:int(len(text) * 0.5)]  # 50% for balanced
-                
-                if not summary.endswith('.'):
-                    summary += '.'
+        # Additional cleaning to prevent hallucination artifacts
+        summary = self._clean_summary(summary, text)
         
         return summary.strip()
+
+    def _clean_summary(self, summary: str, original_text: str) -> str:
+        """
+        Clean and validate summary to prevent hallucination
+        
+        Args:
+            summary: Generated summary text
+            original_text: Original input text for validation
+            
+        Returns:
+            Cleaned summary with hallucinated content removed
+        """
+        if not summary:
+            return ""
+        
+        # Remove common hallucination patterns in Vietnamese
+        hallucination_markers = [
+            "nổi tiếng", "đặc sản", "thiên đường", "danh lam thắng cảnh",
+            "đáng tham quan", "hấp dẫn du khách", "nên ghé thăm"
+        ]
+        
+        # Basic validation: if summary contains terms not in original, be cautious
+        original_lower = original_text.lower()
+        summary_lower = summary.lower()
+        
+        # Split into sentences for better control
+        sentences = [s.strip() for s in summary.split('.') if s.strip()]
+        validated_sentences = []
+        
+        for sentence in sentences:
+            sentence_lower = sentence.lower()
+            
+            # Check if sentence contains hallucination markers not in original
+            has_hallucination = False
+            for marker in hallucination_markers:
+                if marker in sentence_lower and marker not in original_lower:
+                    has_hallucination = True
+                    break
+            
+            # Keep sentence if it doesn't contain obvious hallucinations
+            if not has_hallucination:
+                validated_sentences.append(sentence)
+            else:
+                print(f"Filtered hallucinated sentence: {sentence}")
+        
+        # Reconstruct summary
+        cleaned_summary = '. '.join(validated_sentences)
+        if cleaned_summary and not cleaned_summary.endswith('.'):
+            cleaned_summary += '.'
+        
+        # Fallback: if all sentences were filtered, use first part of original
+        if not cleaned_summary or len(cleaned_summary.strip()) < 10:
+            # Take first meaningful part of original text
+            words = original_text.split()
+            if len(words) > 20:
+                cleaned_summary = ' '.join(words[:20]) + '...'
+            else:
+                cleaned_summary = original_text
+        
+        return cleaned_summary
     
-    def summarize_balanced(self, text: str) -> str:
-        """Generate a balanced summary (40% compression) - default"""
-        return self.summarize(text, quality_mode="balanced")
-    
-    def summarize_detailed(self, text: str) -> str:
-        """Generate a detailed summary (70% compression)"""
-        return self.summarize(text, quality_mode="detailed")
     
     def should_summarize(self, text: str, min_summary_length: int = 300) -> bool:
         """
@@ -387,35 +317,41 @@ class VietnameseSummarizer:
     
     def summarize_batch(
         self, 
-        texts: List[str], 
-        batch_size: int = 8,
-        show_progress: bool = True,
-        **kwargs
+        texts: List[str],
+        show_progress: bool = True
     ) -> List[str]:
         """
-        Generate summaries for multiple texts
+        Summarize multiple texts with consistent quality control
         
         Args:
             texts: List of Vietnamese texts to summarize
-            batch_size: Number of texts to process at once
             show_progress: Whether to show progress bar
-            **kwargs: Additional arguments for summarize()
             
         Returns:
             List of generated summaries
         """
-        summaries = []
+        if not texts:
+            return []
         
-        # Process in batches
-        iterator = range(0, len(texts), batch_size)
+        summaries = []
+        iterator = texts
         if show_progress:
-            iterator = tqdm(iterator, desc="Generating summaries")
+            iterator = tqdm(texts, desc="Generating summaries")
             
-        for i in iterator:
-            batch_texts = texts[i:i + batch_size]
-            batch_summaries = [self.summarize(text, **kwargs) for text in batch_texts]
-            summaries.extend(batch_summaries)
-            
+        for text in iterator:
+            try:
+                summary = self.summarize(text)
+                summaries.append(summary)
+            except Exception as e:
+                print(f"Error summarizing text: {e}")
+                # Fallback to truncated original
+                words = text.split()
+                if len(words) > 15:
+                    fallback = ' '.join(words[:15]) + '...'
+                else:
+                    fallback = text
+                summaries.append(fallback)
+        
         return summaries
     
     def evaluate_on_dataset(

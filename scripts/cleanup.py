@@ -1,8 +1,5 @@
-#!/usr/bin/env python3
-"""
-Project cleanup script
-Removes temporary files, cache directories, and build artifacts
-"""
+
+# xóa các file cache trong project.
 
 import os
 import shutil
@@ -33,7 +30,7 @@ def cleanup_project():
         "*.log"
     ]
     
-    print("🧹 Cleaning up project...")
+    print("Cleaning up project...")
     
     # Remove cache directories
     for pattern in cache_dirs:

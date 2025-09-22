@@ -150,12 +150,6 @@ python scripts/cleanup.py
 pip install -r requirements.txt
 ```
 
-**Vấn đề CUDA**: Để sử dụng chỉ CPU, mô hình sẽ tự động chuyển về CPU.
-
-**Vấn đề Bộ nhớ**: Giảm batch size trong script huấn luyện hoặc sử dụng biến thể mô hình nhỏ hơn.
-
-**File Không Tìm Thấy**: Đảm bảo tập dữ liệu ở thư mục `data/raw/` với tên file đúng.
-
 ## API Endpoints
 
 Khi chạy ứng dụng web:
@@ -164,7 +158,3 @@ Khi chạy ứng dụng web:
 - `POST /analyze` - Endpoint phân tích văn bản
 - `POST /summarize` - Tóm tắt văn bản
 - `POST /sentiment` - Phân tích cảm xúc
-
-## Giấy Phép
-
-Chỉ dành cho mục đích học thuật.
