@@ -151,6 +151,40 @@ class Config:
     def summarization_cache_dir(self) -> Path:
         return self.model_paths.cache_dir
     
+    @property
+    def summarization_data(self) -> Path:
+        """Path to summarization dataset"""
+        data_files = self.params.get('data_files', {})
+        summarization_config = data_files.get('summarization', {})
+        # Use processed data if available, otherwise use raw data
+        processed_path = summarization_config.get('processed', '')
+        raw_path = summarization_config.get('raw', '')
+        
+        if processed_path and (self.project_root / processed_path).exists():
+            return self.project_root / processed_path
+        elif raw_path and (self.project_root / raw_path).exists():
+            return self.project_root / raw_path
+        else:
+            # Fallback to default path
+            return self.data_dir / "raw" / "data_summary.csv"
+    
+    @property
+    def sentiment_data(self) -> Path:
+        """Path to sentiment dataset"""
+        data_files = self.params.get('data_files', {})
+        sentiment_config = data_files.get('sentiment', {})
+        # Use processed data if available, otherwise use raw data
+        processed_path = sentiment_config.get('processed', '')
+        raw_path = sentiment_config.get('raw', '')
+        
+        if processed_path and (self.project_root / processed_path).exists():
+            return self.project_root / processed_path
+        elif raw_path and (self.project_root / raw_path).exists():
+            return self.project_root / raw_path
+        else:
+            # Fallback to default path
+            return self.data_dir / "raw" / "data_sentiment.csv"
+    
     def get_model_config(self, model_type: str) -> Dict[str, Any]:
         """Get configuration for specific model type"""
         return self.params.get('models', {}).get(model_type, {})

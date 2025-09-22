@@ -5,7 +5,7 @@ project:
   name: "vietnamese-text-analysis"
   version: "1.0.0"
   description: "Vietnamese text summarization and sentiment analysis using transformers"
-  author: "Your Name"
+  author: "Vietnamese Text Analysis Project"
 
 # Directory Structure
 paths:

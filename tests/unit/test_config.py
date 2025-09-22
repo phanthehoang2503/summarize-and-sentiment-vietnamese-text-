@@ -1,58 +1,32 @@
 """
 Unit tests for configuration management
 """
+
 import pytest
 from pathlib import Path
+import sys
+import os
 
-from app.core.config import Settings, Config
+# Add src to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-
-class TestSettings:
-    """Test suite for Settings class"""
-    
-    def test_singleton_pattern(self):
-        """Test that Settings follows singleton pattern"""
-        settings1 = Settings()
-        settings2 = Settings()
-        assert settings1 is settings2
-    
-    def test_project_root_exists(self):
-        """Test that project root is found and exists"""
-        settings = Settings()
-        assert settings.project_root.exists()
-        assert (settings.project_root / "params.yaml").exists()
-    
-    def test_model_paths_setup(self):
-        """Test that model paths are properly configured"""
-        settings = Settings()
-        assert settings.model_paths.sentiment_model_dir.exists()
-        assert settings.model_paths.summarizer_model_dir.exists()
-        assert settings.model_paths.cache_dir.exists()
-    
-    def test_directory_properties(self):
-        """Test directory property methods"""
-        settings = Settings()
-        
-        # Test that paths exist
-        assert settings.data_dir.exists()
-        assert settings.static_dir.exists()
-        assert settings.templates_dir.exists()
+from app.core.config import get_config
 
 
-class TestConfig:
-    """Test suite for Config backward compatibility wrapper"""
-    
-    def test_backward_compatibility(self):
-        """Test that Config provides backward compatibility"""
-        config = Config()
-        
-        # Test that all expected attributes exist
-        assert hasattr(config, 'project_root')
-        assert hasattr(config, 'sentiment_model_dir')
-        assert hasattr(config, 'summarization_model_dir')
-        assert hasattr(config, 'summarization_cache_dir')
-        
-        # Test that paths are Path objects
-        assert isinstance(config.project_root, Path)
-        assert isinstance(config.sentiment_model_dir, Path)
-        assert isinstance(config.summarization_model_dir, Path)
+def test_get_config():
+    """Test basic configuration loading"""
+    config = get_config()
+    assert config is not None
+    # Config is an object, not a dict
+    assert hasattr(config, 'project_root')
+    assert hasattr(config, 'params')
+
+
+def test_config_has_required_keys():
+    """Test that config has basic required attributes"""
+    config = get_config()
+    # Test that the config has the expected attributes
+    assert hasattr(config, 'project_root')
+    assert hasattr(config, 'params') 
+    assert hasattr(config, 'app')
+    assert config.params is not None

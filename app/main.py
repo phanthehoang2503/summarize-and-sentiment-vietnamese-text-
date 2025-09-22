@@ -15,13 +15,12 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.core.config import get_config
 
 def setup_logging():
-    """Configure logging for the application"""
+    """Configure simple logging for the application"""
     config = get_config()
-    log_level = config.params.get('logging', {}).get('level', 'INFO')
     
     logging.basicConfig(
-        level=getattr(logging, log_level.upper()),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
             logging.StreamHandler(),  # Console output
             logging.FileHandler(config.logs_dir / 'app.log')  # File output
@@ -29,8 +28,11 @@ def setup_logging():
     )
     
     # Reduce noise from external libraries
-    logging.getLogger('transformers').setLevel(logging.WARNING)
-    logging.getLogger('torch').setLevel(logging.WARNING)
+    logging.getLogger('transformers').setLevel(logging.ERROR)
+    logging.getLogger('torch').setLevel(logging.ERROR)
+    logging.getLogger('tensorflow').setLevel(logging.ERROR)
+    logging.getLogger('datasets').setLevel(logging.ERROR)
+    logging.getLogger('numexpr').setLevel(logging.ERROR)
 
 
 def create_app(config_override=None):
@@ -103,8 +105,8 @@ def main():
     """Main entry point for the web application"""
     config = get_config()
     
-    print("🎓 Starting Vietnamese Text Analysis Academic Demo...")
-    print(f"📱 Open your browser and go to: http://{config.app.host}:{config.app.port}")
+    print("starting Vietnamese Text Analysis Academic Demo...")
+    print(f"open your browser and go to: http://{config.app.host}:{config.app.port}")
     
     app = create_app()
     
@@ -116,9 +118,9 @@ def main():
             use_reloader=False  # Prevent reloader issues with models
         )
     except KeyboardInterrupt:
-        print("\n👋 Shutting down gracefully...")
+        print("\nshutting down gracefully...")
     except Exception as e:
-        print(f"❌ Application failed to start: {e}")
+        print(f"application failed to start: {e}")
         sys.exit(1)
 
 

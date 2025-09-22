@@ -52,27 +52,27 @@ class SummarizationSentimentPipeline:
                 model_path=summarizer_model_path,
                 device=device
             )
-            print("✅ Summarization model loaded successfully")
+            print("Summarization model loaded successfully")
         except Exception as e:
-            print(f"❌ Error loading summarization model: {e}")
+            print(f"Error loading summarization model: {e}")
             raise
         
         try:
             print("Loading sentiment analysis model...")
             self.sentiment_analyzer = create_sentiment_analyzer()
-            print("✅ Sentiment analysis model loaded successfully")
+            print("Sentiment analysis model loaded successfully")
         except Exception as e:
-            print(f"❌ Error loading sentiment model: {e}")
+            print(f"Error loading sentiment model: {e}")
             print("Trying alternative initialization...")
             try:
                 from src.models.sentiment import VietnameseSentimentAnalyzer
                 self.sentiment_analyzer = VietnameseSentimentAnalyzer()
-                print("✅ Sentiment model loaded with alternative method")
+                print("Sentiment model loaded with alternative method")
             except Exception as e2:
-                print(f"❌ Alternative initialization also failed: {e2}")
+                print(f"Alternative initialization also failed: {e2}")
                 raise
         
-        print("🎉 Pipeline initialized successfully!")
+        print("Pipeline initialized successfully!")
     
     def analyze(
         self,
@@ -172,9 +172,9 @@ class SummarizationSentimentPipeline:
                     text_for_sentiment, 
                     return_probabilities=return_sentiment_probabilities
                 )
-                print(f"✅ Sentiment analysis completed: {sentiment_result.get('predicted_label', 'unknown')}")
+                print(f"Sentiment analysis completed: {sentiment_result.get('predicted_label', 'unknown')}")
             except Exception as e:
-                print(f"❌ Sentiment analysis failed: {e}")
+                print(f"Sentiment analysis failed: {e}")
                 # Fallback sentiment result
                 sentiment_result = {
                     'predicted_label': 'UNKNOWN',

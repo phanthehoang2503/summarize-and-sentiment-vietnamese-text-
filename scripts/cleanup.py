@@ -41,9 +41,9 @@ def cleanup_project():
             if item.is_dir():
                 try:
                     shutil.rmtree(item)
-                    print(f"  ✅ Removed directory: {item.relative_to(project_root)}")
+                    print(f"  Removed directory: {item.relative_to(project_root)}")
                 except Exception as e:
-                    print(f"  ⚠️  Could not remove {item.relative_to(project_root)}: {e}")
+                    print(f"  Could not remove {item.relative_to(project_root)}: {e}")
     
     # Remove temporary files
     for pattern in temp_files:
@@ -51,11 +51,11 @@ def cleanup_project():
             if item.is_file():
                 try:
                     item.unlink()
-                    print(f"  ✅ Removed file: {item.relative_to(project_root)}")
+                    print(f"  Removed file: {item.relative_to(project_root)}")
                 except Exception as e:
-                    print(f"  ⚠️  Could not remove {item.relative_to(project_root)}: {e}")
+                    print(f"  Could not remove {item.relative_to(project_root)}: {e}")
     
-    print("✅ Cleanup completed!")
+    print("Cleanup completed!")
 
 if __name__ == "__main__":
     cleanup_project()

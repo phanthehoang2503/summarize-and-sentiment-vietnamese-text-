@@ -1,10 +1,9 @@
 # src/utils/__init__.py
 from .data_analysis import (
-    load_and_sample_data,
-    calculate_text_metrics,
-    analyze_compression_ratio,
-    get_data_quality_report,
-    print_data_summary
+    load_demo_data,
+    get_text_stats,
+    analyze_dataset_text,
+    create_sample_dataset
 )
 
 from .path_utils import (
