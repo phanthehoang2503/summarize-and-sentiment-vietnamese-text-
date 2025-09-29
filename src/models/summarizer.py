@@ -61,6 +61,10 @@ class VietnameseSummarizer:
             
         # Flag to track if we've fallen back to CPU due to CUDA errors
         self.cuda_failed = False
+        
+        # Simple cache for tokenization (improve performance for repeated similar texts)
+        self._tokenization_cache = {}
+        self._cache_max_size = 50  # Smaller cache for summarizer due to longer texts
             
         print(f"Using device: {self.device}")
         print(f"Loading model from: {self.model_path}")
@@ -72,6 +76,10 @@ class VietnameseSummarizer:
         except Exception as e:
             print(f"Warning: Could not load ROUGE metric: {e}")
             self.rouge = None
+            
+    def _get_cache_key(self, text: str) -> str:
+        """Generate cache key for text (first 200 chars to avoid huge keys)"""
+        return str(hash(text.strip()[:200].lower()))
     
     def _load_model(self):
         """Load the tokenizer and model"""
