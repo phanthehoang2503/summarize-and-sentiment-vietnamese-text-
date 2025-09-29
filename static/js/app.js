@@ -219,7 +219,13 @@ class VietnameseTextAnalyzer {
         }
         
         if (sentimentData && sentimentData.label && sentimentData.label !== 'UNKNOWN') {
-            this.displaySentimentResults(sentimentData);
+            // Pass additional context for sentiment source
+            const sentimentContext = {
+                ...sentimentData,
+                usedSummarization: data.used_summarization || false,
+                analysisMethod: data.analysis_method || 'direct sentiment only'
+            };
+            this.displaySentimentResults(sentimentContext);
             sentimentResults.style.display = 'block';
         } else {
             sentimentResults.style.display = 'none';
@@ -237,6 +243,8 @@ class VietnameseTextAnalyzer {
         const confidenceBar = document.getElementById('confidenceBar');
         const confidenceText = document.getElementById('confidenceText');
         const probabilitiesSection = document.getElementById('probabilitiesSection');
+        const sentimentSource = document.getElementById('sentimentSource');
+        const sentimentSourceText = document.getElementById('sentimentSourceText');
 
         // Set sentiment label with appropriate color and styling
         const labelText = sentiment.label || 'Unknown';
@@ -253,6 +261,17 @@ class VietnameseTextAnalyzer {
         } else {
             label.classList.add('sentiment-neutral');
             confidenceBar.className = 'confidence-fill bg-warning';
+        }
+
+        // Show sentiment source information
+        if (sentiment.usedSummarization) {
+            sentimentSourceText.textContent = 'văn bản đã tóm tắt';
+            sentimentSource.style.display = 'block';
+        } else if (sentiment.analysisMethod && sentiment.analysisMethod.includes('direct')) {
+            sentimentSourceText.textContent = 'văn bản gốc';
+            sentimentSource.style.display = 'block';
+        } else {
+            sentimentSource.style.display = 'none';
         }
 
         // Set confidence bar

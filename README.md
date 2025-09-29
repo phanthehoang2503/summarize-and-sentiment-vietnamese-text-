@@ -4,10 +4,8 @@ Hệ thống tóm tắt văn bản và phân tích cảm xúc tiếng Việt s�
 
 ## Yêu Cầu Hệ Thống
 
-- Python 3.8 trở lên
-- RAM 8GB+ (khuyến nghị 16GB để huấn luyện)
-- GPU hỗ trợ CUDA (tùy chọn, để xử lý nhanh hơn)
-- Dung lượng trống 10GB+
+- Python 3.8+ trở lên
+- GPU hỗ trợ CUDA
 
 ## Cài Đặt
 
@@ -51,11 +49,6 @@ Xử lý dữ liệu thô thành tập dữ liệu sạch:
 python scripts/preprocessing.py
 ```
 
-Quá trình này sẽ:
-- Làm sạch và lấy mẫu dữ liệu tóm tắt (mặc định 50%)
-- Làm sạch dữ liệu cảm xúc với việc loại bỏ stopword
-- Lưu file đã xử lý vào `data/processed/`
-
 ## Huấn Luyện Mô Hình
 
 Huấn luyện mô hình tóm tắt:
@@ -75,14 +68,9 @@ Khởi động server Flask:
 python app/main.py
 ```
 
-Hoặc sử dụng phương pháp thay thế:
-```bash
-python -m flask --app app.main run
-```
+Truy cập: http://localhost:5000
 
-Ứng dụng web sẽ có sẵn tại: http://localhost:5000
-
-## Sử Dụng Dòng Lệnh
+## Demo CLI
 
 ### Script Demo
 
@@ -101,53 +89,18 @@ Kiểm tra quy trình đầy đủ:
 python scripts/demos/demo_pipeline.py
 ```
 
-### Jupyter Notebooks
-
-Khởi động Jupyter và mở notebooks:
-```bash
-jupyter notebook notebooks/
-```
-
-Các notebook có sẵn:
-- `00_data_analysis.ipynb` - Khám phá dữ liệu
-- `01_processing.ipynb` - Tiền xử lý dữ liệu
-- `02_train_summarizer.ipynb` - Huấn luyện tóm tắt
-- `03_train_sentiment.ipynb` - Huấn luyện cảm xúc
-
-## Cấu Hình Mô Hình
-
-Mô hình được cấu hình trong `params.yaml`:
-
-- **Mô hình Cảm xúc**: PhoBERT-base (vinai/phobert-base)
-- **Mô hình Tóm tắt**: ViT5-base (VietAI/vit5-base)
-- **Thư mục Cache**: `cache/`
-- **Checkpoint Mô hình**: `models/`
-
 ## Yêu Cầu Dữ Liệu
 
 Đặt tập dữ liệu vào `data/raw/`:
 - `data_sentiment.csv` - Dữ liệu phân tích cảm xúc (cột: comment, label)
 - `data_summary.csv` - Dữ liệu tóm tắt (cột: Text, Summary)
 
-## Đánh Giá
-
-Đánh giá mô hình đã huấn luyện:
-```bash
-python scripts/evaluate_model.py
-```
 
 ## Dọn Dẹp
 
 Xóa file tạm và cache:
 ```bash
 python scripts/cleanup.py
-```
-
-## Khắc Phục Sự Cố
-
-**ImportError**: Đảm bảo tất cả thư viện đã được cài đặt:
-```bash
-pip install -r requirements.txt
 ```
 
 ## API Endpoints

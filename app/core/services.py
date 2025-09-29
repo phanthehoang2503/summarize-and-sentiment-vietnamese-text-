@@ -169,6 +169,7 @@ class TextAnalysisService:
     def analyze_sentiment(self, text: str) -> Dict[str, Any]:
         """
         Analyze sentiment of Vietnamese text
+        Use the same pipeline for consistency
         
         Args:
             text: Input Vietnamese text
@@ -185,15 +186,27 @@ class TextAnalysisService:
             # Check if text is Vietnamese
             is_vietnamese = self.is_vietnamese_text(text)
             
-            # Analyze sentiment
-            result = self.sentiment_analyzer.predict_sentiment(text, return_probabilities=True)
+            # Use pipeline for sentiment analysis to ensure consistency
+            result = self.pipeline.analyze(text, include_original_text=False)
+            
+            # Check if pipeline returned an error
+            if 'error' in result:
+                processing_time = time.time() - start_time
+                return {
+                    'success': False,
+                    'error': result['error'],
+                    'processing_time': round(processing_time, 3)
+                }
+            
+            # Extract sentiment data from pipeline result
+            sentiment_data = result.get('sentiment', {})
             
             processing_time = time.time() - start_time
             
             return {
                 'success': True,
                 'result': {
-                    **result,
+                    **sentiment_data,
                     'tokens': self.count_tokens(text),
                     'processing_time': round(processing_time, 3),
                     'is_vietnamese': is_vietnamese

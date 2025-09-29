@@ -33,11 +33,8 @@ class VietnameseSentimentAnalyzer:
         self.model_path = Path(model_path or config.sentiment_model_dir)
         self.cache_dir = Path(cache_dir or config.sentiment_cache_dir)
         
-        # Device setup with fallback
-        if device:
-            self.device = torch.device(device)
-        else:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # Device setup - Force CPU to avoid CUDA issues
+        self.device = torch.device('cpu')  # Always use CPU for stability
             
         self.model = None
         self.tokenizer = None
@@ -119,13 +116,30 @@ class VietnameseSentimentAnalyzer:
             return False
             
     def _validate_text_input(self, text: str) -> bool:
-        """Validate input text"""
+        """Validate input text with comprehensive checks"""
         if not isinstance(text, str):
             return False
         if not text.strip():
             return False
         if len(text) > 10000:  # Reasonable limit
             return False
+        
+        # Check for characters that might cause tokenization issues
+        text_clean = text.strip()
+        if not text_clean:
+            return False
+            
+        # Additional safety check - ensure text has valid characters
+        try:
+            # Try basic tokenization test
+            if self.tokenizer:
+                test_encoding = self.tokenizer.encode(text_clean[:100], add_special_tokens=False)
+                if not test_encoding:
+                    return False
+        except Exception as e:
+            logger.warning(f"Text validation failed during tokenization test: {e}")
+            return False
+            
         return True
         
     def predict_sentiment(self, 
@@ -159,11 +173,27 @@ class VietnameseSentimentAnalyzer:
                 return_tensors="pt"
             ).to(self.device)
             
-            # Get predictions
+            # Get predictions with CUDA error handling
             with torch.no_grad():
-                outputs = self.model(**inputs)
-                probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
-                predicted_class = torch.argmax(probabilities, dim=-1).item()
+                try:
+                    outputs = self.model(**inputs)
+                    probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
+                    predicted_class = torch.argmax(probabilities, dim=-1).item()
+                except RuntimeError as cuda_error:
+                    if "CUDA" in str(cuda_error) or "assert" in str(cuda_error).lower():
+                        logger.warning(f"CUDA error encountered: {cuda_error}")
+                        logger.info("Falling back to CPU for this prediction...")
+                        
+                        # Move to CPU and retry
+                        inputs_cpu = {k: v.cpu() for k, v in inputs.items()}
+                        self.model = self.model.cpu()
+                        self.device = torch.device('cpu')
+                        
+                        outputs = self.model(**inputs_cpu)
+                        probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
+                        predicted_class = torch.argmax(probabilities, dim=-1).item()
+                    else:
+                        raise
             
             if return_probabilities:
                 return {
@@ -180,6 +210,10 @@ class VietnameseSentimentAnalyzer:
         except Exception as e:
             logger.error(f"Sentiment prediction error: {e}")
             return None
+    
+    def predict(self, text: str, return_probabilities: bool = False) -> Union[str, Dict, None]:
+        """Alias for predict_sentiment for backward compatibility"""
+        return self.predict_sentiment(text, return_probabilities)
             
     def analyze_batch(self, texts: List[str], batch_size: int = 16) -> List[Optional[str]]:
         """Analyze sentiment for multiple texts efficiently"""
