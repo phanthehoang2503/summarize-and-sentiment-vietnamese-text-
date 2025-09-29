@@ -1,40 +1,10 @@
-/**
- * API Client Module
- * Handles all communication with backend APIs
- */
-class ApiClient {
+// API Service for Vietnamese Text Analysis
+class ApiService {
     constructor() {
-        this.baseUrl = '';
+        this.baseUrl = '/api';
     }
 
-    /**
-     * Upload file to server
-     */
-    async uploadFile(file) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) {
-            throw new Error(`Upload failed: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        if (!result.success) {
-            throw new Error(result.error || 'Upload failed');
-        }
-
-        return result;
-    }
-
-    /**
-     * Perform text analysis
-     */
-    async performAnalysis(text, type) {
+    async performAnalysis(type, text) {
         let endpoint;
         const requestBody = { text: text };
         
@@ -67,12 +37,31 @@ class ApiClient {
         const result = await response.json();
         
         if (!result.success) {
-            throw new Error(result.error || 'Analysis failed');
+            throw new Error(result.error || 'Phân tích thất bại');
+        }
+
+        return result;
+    }
+
+    async uploadFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error(`Upload failed: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Tải lên thất bại');
         }
 
         return result;
     }
 }
-
-// Export for module use
-window.ApiClient = ApiClient;

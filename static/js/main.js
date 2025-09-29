@@ -1,52 +1,28 @@
-/**
- * Vietnamese Text Analyzer - Main Application
- * Orchestrates all modules and handles user interactions
- */
+// Main Application - Vietnamese Text Analysis
 class VietnameseTextAnalyzer {
     constructor() {
-        // Initialize modules
-        this.apiClient = new ApiClient();
+        // Initialize components
+        this.apiService = new ApiService();
         this.uiManager = new UIManager();
+        this.resultsDisplay = new ResultsDisplay(this.uiManager);
+        this.fileUploadHandler = new FileUploadHandler(this.apiService, this.uiManager);
         this.historyManager = new HistoryManager();
-        this.fileHandler = new FileHandler(this.apiClient, this.uiManager);
         
         // Initialize the application
         this.initializeEventListeners();
         this.historyManager.updateHistoryDisplay();
     }
 
-    /**
-     * Initialize main event listeners
-     */
     initializeEventListeners() {
         // Main action buttons
-        const buttons = {
-            summarizeBtn: () => this.performAnalysis('summarize'),
-            sentimentBtn: () => this.performAnalysis('sentiment'),
-            analyzeBtn: () => this.performAnalysis('analyze'),
-            clearBtn: () => this.clearAll()
-        };
-
-        Object.entries(buttons).forEach(([id, handler]) => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.addEventListener('click', handler);
-            }
-        });
-
-        // History panel clear button (if exists)
-        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
-        if (clearHistoryBtn) {
-            clearHistoryBtn.addEventListener('click', () => this.clearHistory());
-        }
+        document.getElementById('summarizeBtn')?.addEventListener('click', () => this.performAnalysis('summarize'));
+        document.getElementById('sentimentBtn')?.addEventListener('click', () => this.performAnalysis('sentiment'));
+        document.getElementById('analyzeBtn')?.addEventListener('click', () => this.performAnalysis('analyze'));
+        document.getElementById('clearBtn')?.addEventListener('click', () => this.clearAll());
     }
 
-    /**
-     * Perform text analysis
-     */
     async performAnalysis(type) {
-        const textInput = document.getElementById('textInput');
-        const text = textInput.value.trim();
+        const text = this.uiManager.getText();
         
         if (!text) {
             this.uiManager.showError('Vui lòng nhập văn bản để phân tích');
@@ -57,12 +33,9 @@ class VietnameseTextAnalyzer {
         this.uiManager.hideResults();
 
         try {
-            const result = await this.apiClient.performAnalysis(text, type);
+            const result = await this.apiService.performAnalysis(type, text);
             
-            // Display results
-            this.uiManager.displayResults(result, type);
-            
-            // Add to history
+            this.resultsDisplay.displayResults(result, type);
             this.historyManager.addToHistory(text, result, type);
             
         } catch (error) {
@@ -73,52 +46,12 @@ class VietnameseTextAnalyzer {
         }
     }
 
-    /**
-     * Clear all content and results
-     */
     clearAll() {
         this.uiManager.clearAll();
     }
-
-    /**
-     * Clear analysis history
-     */
-    clearHistory() {
-        if (confirm('Bạn có chắc muốn xóa toàn bộ lịch sử phân tích?')) {
-            this.historyManager.clearHistory();
-        }
-    }
-
-    /**
-     * Get application status
-     */
-    getStatus() {
-        return {
-            modules: {
-                apiClient: !!this.apiClient,
-                uiManager: !!this.uiManager,
-                historyManager: !!this.historyManager,
-                fileHandler: !!this.fileHandler
-            },
-            history: this.historyManager.getHistoryStats()
-        };
-    }
 }
 
-// Initialize the application when DOM is loaded
+// Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    // Make historyManager globally accessible for button clicks
-    window.historyManager = null;
-    
-    try {
-        const app = new VietnameseTextAnalyzer();
-        window.historyManager = app.historyManager;
-        window.textAnalyzer = app;
-        
-        console.log('Vietnamese Text Analyzer initialized successfully');
-        console.log('App status:', app.getStatus());
-        
-    } catch (error) {
-        console.error('Failed to initialize Vietnamese Text Analyzer:', error);
-    }
+    window.textAnalyzer = new VietnameseTextAnalyzer();
 });

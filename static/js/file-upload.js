@@ -1,29 +1,22 @@
-/**
- * File Handler Module
- * Handles file upload and processing
- */
-class FileHandler {
-    constructor(apiClient, uiManager) {
-        this.apiClient = apiClient;
+// File Upload Handler for Vietnamese Text Analysis
+class FileUploadHandler {
+    constructor(apiService, uiManager) {
+        this.apiService = apiService;
         this.uiManager = uiManager;
         this.allowedTypes = ['text/plain', 'text/csv', 'application/csv'];
         this.initializeEventListeners();
     }
 
-    /**
-     * Initialize file upload event listeners
-     */
     initializeEventListeners() {
         const fileInput = document.getElementById('fileInput');
         const fileUploadArea = document.getElementById('fileUploadArea');
         
         if (!fileInput || !fileUploadArea) return;
 
-        // Click to select file
         fileUploadArea.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => this.handleFileUpload(e.target.files[0]));
         
-        // Drag and drop
+        // Drag and drop events
         fileUploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             fileUploadArea.classList.add('dragover');
@@ -41,30 +34,26 @@ class FileHandler {
         });
     }
 
-    /**
-     * Handle file upload
-     */
     async handleFileUpload(file) {
         if (!file) return;
 
         // Validate file type
         if (!this.isValidFileType(file)) {
-            this.uiManager.showError('Vui lòng chọn tệp .txt hoặc .csv');
+            this.uiManager.showError('Vui lòng thả tệp .txt hoặc .csv vào đây');
             return;
         }
 
         this.uiManager.showLoading(true);
 
         try {
-            const result = await this.apiClient.uploadFile(file);
+            const result = await this.apiService.uploadFile(file);
             
-            // Set the uploaded content to textarea
-            document.getElementById('textInput').value = result.text || result.content;
-            
-            this.uiManager.showSuccess(
-                `Tệp đã được tải lên thành công! Đã trích xuất ${(result.text || result.content).length} ký tự.`
-            );
-            
+            if (result.success) {
+                this.uiManager.setText(result.content || result.text);
+                this.uiManager.showSuccess(
+                    `Tệp đã được tải lên thành công! Đã trích xuất ${(result.content || result.text).length} ký tự.`
+                );
+            }
         } catch (error) {
             console.error('File upload error:', error);
             this.uiManager.showError(`Tải tệp thất bại: ${error.message}`);
@@ -73,14 +62,7 @@ class FileHandler {
         }
     }
 
-    /**
-     * Validate file type
-     */
     isValidFileType(file) {
-        return this.allowedTypes.includes(file.type) || 
-               file.name.match(/\.(txt|csv)$/i);
+        return this.allowedTypes.includes(file.type) || file.name.match(/\.(txt|csv)$/i);
     }
 }
-
-// Export for module use
-window.FileHandler = FileHandler;

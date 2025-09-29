@@ -43,15 +43,7 @@ class VietnameseSentimentAnalyzer:
         # Sentiment labels - clear and consistent
         self.label_mapping = {0: "NEG", 1: "NEU", 2: "POS"}
         
-        # Simple cache for tokenization (improve performance for repeated similar texts)
-        self._tokenization_cache = {}
-        self._cache_max_size = 100
-        
         logger.info(f"SentimentAnalyzer initialized - Device: {self.device}, Model: {self.model_path}")
-        
-    def _get_cache_key(self, text: str) -> str:
-        """Generate cache key for text"""
-        return str(hash(text.strip().lower()))
         
     def _validate_model_path(self) -> bool:
         """Validate model files exist"""
@@ -149,41 +141,6 @@ class VietnameseSentimentAnalyzer:
             return False
             
         return True
-    
-    def _tokenize_with_cache(self, text: str):
-        """Tokenize text with caching for performance optimization"""
-        cache_key = self._get_cache_key(text)
-        
-        # Check if tokenization is cached
-        if cache_key in self._tokenization_cache:
-            cached_inputs = self._tokenization_cache[cache_key]
-            # Return cached tensors moved to current device
-            return {k: v.to(self.device) for k, v in cached_inputs.items()}
-        
-        # Tokenize normally
-        inputs = self.tokenizer(
-            text,
-            truncation=True,
-            padding=True,
-            max_length=512,
-            return_tensors="pt"
-        )
-        
-        # Cache the CPU tensors (to avoid device-specific caching issues)
-        if len(self._tokenization_cache) < self._cache_max_size:
-            # Store CPU tensors in cache
-            cpu_inputs = {k: v.cpu() for k, v in inputs.items()}
-            self._tokenization_cache[cache_key] = cpu_inputs
-        elif len(self._tokenization_cache) >= self._cache_max_size:
-            # Simple cache eviction - remove oldest entry
-            oldest_key = next(iter(self._tokenization_cache))
-            del self._tokenization_cache[oldest_key]
-            cpu_inputs = {k: v.cpu() for k, v in inputs.items()}
-            self._tokenization_cache[cache_key] = cpu_inputs
-        
-        return {k: v.to(self.device) for k, v in inputs.items()}
-            
-        return True
         
     def predict_sentiment(self, 
                          text: str, 
@@ -207,8 +164,14 @@ class VietnameseSentimentAnalyzer:
             return None
             
         try:
-            # Optimized tokenization with caching for performance
-            inputs = self._tokenize_with_cache(text)
+            # Tokenize with safe parameters
+            inputs = self.tokenizer(
+                text,
+                truncation=True,
+                padding=True,
+                max_length=512,
+                return_tensors="pt"
+            ).to(self.device)
             
             # Get predictions with CUDA error handling
             with torch.no_grad():

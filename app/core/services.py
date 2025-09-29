@@ -8,14 +8,6 @@ import logging
 import threading
 from pathlib import Path
 
-# Import performance utilities
-from app.core.performance import (
-    cache_api_response, 
-    api_response_cache, 
-    performance_tracker,
-    get_text_cache_key
-)
-
 # Import models with proper error handling
 try:
     from src.models.sentiment import create_sentiment_analyzer
@@ -127,7 +119,6 @@ class TextAnalysisService:
         """Simple token counting"""
         return len(text.split())
     
-    @cache_api_response()
     def summarize_text(self, text: str) -> Dict[str, Any]:
         """
         Generate summary for Vietnamese text
@@ -175,7 +166,6 @@ class TextAnalysisService:
                 'processing_time': round(processing_time, 3)
             }
     
-    @cache_api_response()
     def analyze_sentiment(self, text: str) -> Dict[str, Any]:
         """
         Analyze sentiment of Vietnamese text
@@ -232,7 +222,6 @@ class TextAnalysisService:
                 'processing_time': round(processing_time, 3)
             }
     
-    @cache_api_response()
     def analyze_combined(self, text: str) -> Dict[str, Any]:
         """
         Perform combined summarization and sentiment analysis
@@ -315,27 +304,6 @@ class TextAnalysisService:
                 'success': False,
                 'error': str(e)
             }
-    
-    def get_performance_stats(self) -> Dict[str, Any]:
-        """Get performance and caching statistics"""
-        return {
-            'cache_stats': api_response_cache.stats(),
-            'performance_stats': performance_tracker.get_stats(),
-            'service_status': self.get_service_status()
-        }
-    
-    def clear_caches(self) -> Dict[str, str]:
-        """Clear all caches for memory cleanup"""
-        api_response_cache.clear()
-        
-        # Clear model-level caches if they exist
-        if self._sentiment_analyzer and hasattr(self._sentiment_analyzer, '_tokenization_cache'):
-            self._sentiment_analyzer._tokenization_cache.clear()
-        
-        if self._summarizer and hasattr(self._summarizer, '_tokenization_cache'):
-            self._summarizer._tokenization_cache.clear()
-            
-        return {'status': 'Caches cleared successfully'}
 
 
 # Global service instance

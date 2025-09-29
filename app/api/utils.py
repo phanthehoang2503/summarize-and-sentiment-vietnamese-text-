@@ -70,34 +70,3 @@ def system_status():
                 'combined_pipeline': 'error'
             }
         }), 500
-
-
-@utils_bp.route('/performance', methods=['GET'])
-def performance_stats():
-    """Get performance and caching statistics"""
-    try:
-        from app.core.services import text_analysis_service
-        stats = text_analysis_service.get_performance_stats()
-        return jsonify(stats)
-    except Exception as e:
-        logger.error(f"Performance stats failed: {e}")
-        return jsonify({
-            'error': 'Failed to get performance stats',
-            'details': str(e)
-        }), 500
-
-
-@utils_bp.route('/cache/clear', methods=['POST'])
-def clear_caches():
-    """Clear all caches (admin endpoint)"""
-    try:
-        from app.core.services import text_analysis_service
-        result = text_analysis_service.clear_caches()
-        logger.info("Caches cleared via API")
-        return jsonify(result)
-    except Exception as e:
-        logger.error(f"Cache clear failed: {e}")
-        return jsonify({
-            'error': 'Failed to clear caches',
-            'details': str(e)
-        }), 500
