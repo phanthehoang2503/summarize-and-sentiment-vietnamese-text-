@@ -24,20 +24,20 @@ MajorProject/
 │   └── api/               
 ├── data/
 │   ├── raw/               # Dữ liệu gốc
-│   ├── processed/         # Dữ liệu đã làm sạch
+│   ├── processed/         # Dữ liệu đã được xử lý
 │   └── vietnamese-stopwords.txt
-├── models/                # Checkpoint mô hình đã huấn luyện
-│   ├── sentiment/         # Mô hình phân tích cảm xúc
+├── models/                # Checkpoint các mô hình đã huấn luyện
+│   ├── sentiment/         # Mô hình phân tích
 │   └── summarizer/        # Mô hình tóm tắt
 ├── scripts/               # Script xử lý và huấn luyện
 │   ├── preprocessing.py   
 │   ├── train_summarizer.py
 │   ├── evaluate_model.py
 │   └── demos/             
-├── notebooks/             # notebooks
-├── src/                   # Module mã nguồn
-├── static/                # web
-├── templates/             # Template HTML
+├── notebooks/             
+├── src/                   
+├── static/                # Web
+├── templates/             # HTML
 └── logs/                  
 ```
 
@@ -56,7 +56,7 @@ Huấn luyện mô hình tóm tắt:
 python scripts/train_summarizer.py
 ```
 
-Huấn luyện mô hình phân tích cảm xúc:
+Huấn luyện mô hình phân tích:
 ```bash
 python scripts/train_sentiment.py
 ```
