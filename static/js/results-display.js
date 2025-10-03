@@ -121,7 +121,7 @@ class ResultsDisplay {
         const { probabilitiesSection } = this.ui.elements;
 
         if (probabilities && Object.keys(probabilities).length > 0) {
-            let probabilitiesHtml = '<h6 class="small mb-3"><i class="fas fa-chart-pie me-1"></i>Phân Bố Xác Suất:</h6>';
+            let probabilitiesHtml = '<h6 class="small mb-3">Phân Bố Xác Suất:</h6>';
             probabilitiesHtml += '<div class="row">';
             
             for (const [label, prob] of Object.entries(probabilities)) {
@@ -158,18 +158,15 @@ class ResultsDisplay {
         const stats = [
             {
                 label: 'Thời gian xử lý',
-                value: data.processing_time ? `${data.processing_time}s` : 'N/A',
-                icon: 'fas fa-clock'
+                value: data.processing_time ? `${data.processing_time}s` : 'N/A'
             },
             {
                 label: 'Tokens văn bản gốc',
-                value: data.original_tokens || data.tokens || (data.sentiment && data.sentiment.tokens) || 'N/A',
-                icon: 'fas fa-file-text'
+                value: data.original_tokens || data.tokens || (data.sentiment && data.sentiment.tokens) || 'N/A'
             },
             {
                 label: 'Tokens tóm tắt',
-                value: data.summary_tokens || (data.summary ? data.summary.split(' ').length : 'N/A'),
-                icon: 'fas fa-compress-alt'
+                value: data.summary_tokens || (data.summary ? data.summary.split(' ').length : 'N/A')
             }
         ];
 
@@ -178,9 +175,6 @@ class ResultsDisplay {
             if (stat.value !== 'N/A') {
                 statsHtml += `
                     <div class="stat-item">
-                        <div class="stat-icon">
-                            <i class="${stat.icon}"></i>
-                        </div>
                         <div class="stat-content">
                             <div class="stat-label">${stat.label}</div>
                             <div class="stat-value">${stat.value}</div>

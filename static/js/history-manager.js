@@ -51,13 +51,12 @@ class HistoryManager {
     }
 
     updateHistoryDisplay() {
-        const historyContainer = document.querySelector('.history-list');
+        const historyContainer = document.querySelector('#historyPanel');
         if (!historyContainer) return;
         
         if (this.history.length === 0) {
             historyContainer.innerHTML = `
                 <div class="text-center text-muted py-3">
-                    <i class="fas fa-history fa-2x mb-2"></i>
                     <p>Chưa có lịch sử phân tích</p>
                 </div>`;
             return;
@@ -86,10 +85,10 @@ class HistoryManager {
                     <div class="history-text">${item.text}</div>
                     <div class="history-actions">
                         <button class="btn btn-sm btn-outline-primary reuse-btn" data-text="${this.escapeHtml(item.fullText)}">
-                            <i class="fas fa-redo"></i> Sử dụng lại
+                            Sử dụng lại
                         </button>
                         <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${item.id}">
-                            <i class="fas fa-trash"></i>
+                            Xóa
                         </button>
                     </div>
                 </div>`;
