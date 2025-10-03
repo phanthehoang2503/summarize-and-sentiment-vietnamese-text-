@@ -19,9 +19,9 @@ pip install -r requirements.txt
 ```
 MajorProject/
 ├── app/                    # Ứng dụng web
-│   ├── main.py            # Điểm vào ứng dụng Flask
-│   ├── core/              # Cấu hình cốt lõi
-│   └── api/               # Các endpoint API
+│   ├── main.py            
+│   ├── core/              
+│   └── api/               
 ├── data/
 │   ├── raw/               # Dữ liệu gốc
 │   ├── processed/         # Dữ liệu đã làm sạch
@@ -30,15 +30,15 @@ MajorProject/
 │   ├── sentiment/         # Mô hình phân tích cảm xúc
 │   └── summarizer/        # Mô hình tóm tắt
 ├── scripts/               # Script xử lý và huấn luyện
-│   ├── preprocessing.py   # Tiền xử lý dữ liệu
+│   ├── preprocessing.py   
 │   ├── train_summarizer.py
 │   ├── evaluate_model.py
-│   └── demos/             # Script demo
-├── notebooks/             # Jupyter notebooks
+│   └── demos/             
+├── notebooks/             # notebooks
 ├── src/                   # Module mã nguồn
-├── static/                # Tài nguyên web
+├── static/                # web
 ├── templates/             # Template HTML
-└── logs/                  # Log ứng dụng
+└── logs/                  
 ```
 
 ## Tiền Xử Lý Dữ Liệu
